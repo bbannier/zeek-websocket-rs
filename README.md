@@ -35,6 +35,8 @@ let (mut socket, _) = connect(uri).unwrap();
 The clients sends a list of topics for subscription. The server responds with
 an ACK message.
 
+<div class="warning">Clients can only publish to topics they are subscribed to.</div>
+
 ```no_run
 # use tungstenite::connect;
 # let uri = "ws://127.0.0.1:4711/v1/messages/json";
