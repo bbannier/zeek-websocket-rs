@@ -423,13 +423,12 @@ mod test {
 
     #[test]
     fn port() {
-        let p = &Port {
-            number: 8080,
-            protocol: Protocol::TCP,
-        };
+        let p = Port::new(8080, Protocol::TCP);
+        assert_eq!(p.number(), 8080);
+        assert_eq!(p.protocol(), Protocol::TCP);
 
         assert_eq!(serde_json::to_string(&p).unwrap(), r#""8080/tcp""#);
-        assert_eq!(p, &"8080/tcp".parse().unwrap());
+        assert_eq!(p, "8080/tcp".parse().unwrap());
 
         assert_eq!(
             Err(ParseError::InvalidPort("foo".into())),
@@ -456,6 +455,38 @@ mod test {
         assert_eq!(Protocol::UDP.to_string(), "udp");
         assert_eq!(Protocol::ICMP.to_string(), "icmp");
         assert_eq!(Protocol::UNKNOWN.to_string(), "unknown");
+    }
+
+    #[test]
+    fn table() {
+        assert_eq!(
+            serde_json::from_value::<Value>(json!({"@data-type":"table", "data": []})).unwrap(),
+            Value::Table(vec![])
+        );
+
+        assert_eq!(
+            serde_json::from_value::<Value>(json!({
+            "@data-type":"table",
+            "data": [{
+                "key":{
+                    "@data-type":"string",
+                    "data": "one",
+                },
+                "value":{
+                    "@data-type":"count",
+                    "data": 1,
+                }
+            }]}))
+            .unwrap(),
+            Value::Table(vec![TableEntry::new(
+                Value::String("one".into()),
+                Value::Count(1)
+            )])
+        );
+
+        let t = TableEntry::new(Value::String("one".into()), Value::Count(1));
+        assert_eq!(t.key().clone(), Value::String("one".into()));
+        assert_eq!(t.value().clone(), Value::Count(1));
     }
 
     #[test]

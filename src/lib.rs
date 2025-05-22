@@ -11,7 +11,7 @@ use thiserror::Error;
 pub mod types;
 
 /// Data messages of the Zeek API.
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum Message {
     /// An ACK message typically sent by the server on successful subscription.
@@ -160,7 +160,7 @@ pub struct Event {
 }
 
 /// Topics to subscribe to. This should be the first message sent to the server.
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct Subscriptions(pub Vec<String>);
 
 #[cfg(feature = "tungstenite")]
@@ -170,6 +170,22 @@ impl TryInto<tungstenite::Message> for Subscriptions {
     fn try_into(self) -> Result<tungstenite::Message, Self::Error> {
         let msg = serde_json::to_string(&self)?;
         Ok(msg.into())
+    }
+}
+
+#[cfg(feature = "tungstenite")]
+impl TryFrom<tungstenite::Message> for Subscriptions {
+    type Error = DeserializationError;
+
+    fn try_from(value: tungstenite::Message) -> Result<Self, Self::Error> {
+        let msg = match value {
+            tungstenite::Message::Text(txt) => serde_json::from_str(&txt),
+            tungstenite::Message::Binary(bin) => serde_json::from_slice(&bin),
+            _ => return Err(DeserializationError::UnexpectedMessageType),
+        }
+        .map_err(|e| DeserializationError::Json(e.to_string()))?;
+
+        Ok(msg)
     }
 }
 
@@ -249,5 +265,36 @@ mod test {
         );
 
         Ok(())
+    }
+
+    #[cfg(feature = "tungstenite")]
+    #[test]
+    fn message_try_from_into_tungstenite() {
+        let event = Message::DataMessage {
+            topic: "my_topic".into(),
+            data: Data::Event(Event {
+                name: "my_event".into(),
+                args: vec![],
+                metadata: vec![],
+            }),
+        };
+
+        let msg: tungstenite::Message = event.clone().try_into().unwrap();
+        let event2: Message = msg.try_into().unwrap();
+
+        assert_eq!(event, event2);
+    }
+
+    #[cfg(feature = "tungstenite")]
+    #[test]
+    fn subscriptions_try_from_into_tungstenite() {
+        use crate::Subscriptions;
+
+        let subscriptions = Subscriptions(vec!["a".into(), "b".into()]);
+
+        let msg: tungstenite::Message = subscriptions.clone().try_into().unwrap();
+        let subscriptions2: Subscriptions = msg.try_into().unwrap();
+
+        assert_eq!(subscriptions, subscriptions2);
     }
 }
