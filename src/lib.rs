@@ -6,6 +6,8 @@
 use crate::types::Value;
 use if_chain::if_chain;
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "tungstenite")]
 use thiserror::Error;
 
 pub mod types;
