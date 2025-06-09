@@ -1,8 +1,5 @@
 use tungstenite::connect;
-use zeek_websocket::{
-    types::Value,
-    {Data, Event, Message, Subscriptions},
-};
+use zeek_websocket::{Data, Event, Message, Subscriptions};
 
 fn main() {
     let uri = "ws://127.0.0.1:8080/v1/messages/json";
@@ -10,22 +7,15 @@ fn main() {
     let (mut socket, _) = connect(uri).unwrap();
 
     // Subscribe client.
-    let subscriptions = Subscriptions(vec!["/ping".into()]);
+    let subscriptions = Subscriptions::from(vec!["/ping"]);
     socket.send(subscriptions.try_into().unwrap()).unwrap();
 
     // Write event.
     socket
         .send(
-            Message::DataMessage {
-                topic: "/ping".into(),
-                data: Data::Event(Event {
-                    name: "ping".into(),
-                    args: vec![Value::from("hohi")],
-                    metadata: vec![],
-                }),
-            }
-            .try_into()
-            .unwrap(),
+            Message::new_data("/ping", Event::new("ping", vec!["hohi"]))
+                .try_into()
+                .unwrap(),
         )
         .unwrap();
 
@@ -45,16 +35,9 @@ fn main() {
 
             socket
                 .send(
-                    Message::DataMessage {
-                        topic: "/ping".into(),
-                        data: Data::Event(Event {
-                            name: "pong".into(),
-                            args: vec![Value::from("yeah")],
-                            metadata: vec![],
-                        }),
-                    }
-                    .try_into()
-                    .unwrap(),
+                    Message::new_data("/ping", Event::new("pong", vec!["yeah"]))
+                        .try_into()
+                        .unwrap(),
                 )
                 .unwrap();
         }

@@ -9,10 +9,7 @@ use std::{
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::connect_async;
 use tungstenite::client::IntoClientRequest;
-use zeek_websocket::{
-    types::Value,
-    {Data, Event, Message, Subscriptions},
-};
+use zeek_websocket::{Data, Event, Message, Subscriptions};
 
 #[tokio::main]
 async fn main() {
@@ -26,7 +23,7 @@ async fn main() {
     const TOPIC: &str = "/ping";
 
     // Subscribe client.
-    tx.send(Subscriptions(vec![TOPIC.into()]).try_into().unwrap())
+    tx.send(Subscriptions::from(vec![TOPIC]).try_into().unwrap())
         .await
         .unwrap();
 
@@ -43,16 +40,9 @@ async fn main() {
 
         loop {
             tx.send(
-                Message::DataMessage {
-                    topic: TOPIC.into(),
-                    data: Data::Event(Event {
-                        name: "ping".into(),
-                        args: vec![Value::from("hohi")],
-                        metadata: vec![],
-                    }),
-                }
-                .try_into()
-                .unwrap(),
+                Message::new_data(TOPIC, Event::new("ping", vec!["hohi"]))
+                    .try_into()
+                    .unwrap(),
             )
             .await
             .unwrap();

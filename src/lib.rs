@@ -44,6 +44,19 @@ pub enum Message {
     },
 }
 
+impl Message {
+    pub fn new_data<T, D>(topic: T, data: D) -> Self
+    where
+        T: Into<String>,
+        D: Into<Data>,
+    {
+        Message::DataMessage {
+            topic: topic.into(),
+            data: data.into(),
+        }
+    }
+}
+
 #[cfg(feature = "tungstenite")]
 impl TryInto<tungstenite::Message> for Message {
     type Error = serde_json::Error;
@@ -96,6 +109,12 @@ pub enum Data {
     Other(Value),
 }
 
+impl From<Event> for Data {
+    fn from(value: Event) -> Self {
+        Data::Event(value)
+    }
+}
+
 const EVENT_TYPE: u64 = 1;
 const FORMAT_NR: u64 = 1;
 
@@ -118,7 +137,7 @@ impl From<Value> for Data {
                     None => vec![],
                 };
 
-                return Data::Event(Event { name, args, metadata });
+                return Data::Event(Event::new(name, args).with_metadata(metadata));
             }
         };
 
@@ -161,9 +180,41 @@ pub struct Event {
     pub metadata: Vec<Value>,
 }
 
+impl Event {
+    pub fn new<N, A>(name: N, args: Vec<A>) -> Self
+    where
+        N: Into<String>,
+        A: Into<Value>,
+    {
+        Self {
+            name: name.into(),
+            args: args.into_iter().map(Into::into).collect(),
+            metadata: Vec::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_metadata<M>(mut self, metadata: Vec<M>) -> Self
+    where
+        M: Into<Value>,
+    {
+        self.metadata = metadata.into_iter().map(Into::into).collect();
+        self
+    }
+}
+
 /// Topics to subscribe to. This should be the first message sent to the server.
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct Subscriptions(pub Vec<String>);
+
+impl<T> From<Vec<T>> for Subscriptions
+where
+    T: Into<String>,
+{
+    fn from(value: Vec<T>) -> Self {
+        Subscriptions(value.into_iter().map(Into::into).collect())
+    }
+}
 
 #[cfg(feature = "tungstenite")]
 impl TryInto<tungstenite::Message> for Subscriptions {
@@ -228,14 +279,7 @@ mod test {
         );
 
         assert_eq!(
-            Message::DataMessage {
-                topic: "/foo/bar".into(),
-                data: Data::Event(Event {
-                    name: "pong".into(),
-                    args: vec![Value::Count(42)],
-                    metadata: vec![],
-                }),
-            },
+            Message::new_data("/foo/bar", Event::new("pong", vec![42u64]),),
             serde_json::from_value(json!({
                 "type": "data-message",
                 "topic": "/foo/bar",
@@ -254,10 +298,7 @@ mod test {
         );
 
         assert_eq!(
-            Message::DataMessage {
-                topic: "/foo/bar".into(),
-                data: Data::Other(Value::Count(42)),
-            },
+            Message::new_data("/foo/bar", Data::Other(Value::Count(42))),
             serde_json::from_value(json!({
                 "type": "data-message",
                 "topic": "/foo/bar",
@@ -272,14 +313,7 @@ mod test {
     #[cfg(feature = "tungstenite")]
     #[test]
     fn message_try_from_into_tungstenite() {
-        let event = Message::DataMessage {
-            topic: "my_topic".into(),
-            data: Data::Event(Event {
-                name: "my_event".into(),
-                args: vec![],
-                metadata: vec![],
-            }),
-        };
+        let event = Message::new_data("my_topic", Event::new("my_event", vec![1]));
 
         let msg: tungstenite::Message = event.clone().try_into().unwrap();
         let event2: Message = msg.try_into().unwrap();
@@ -292,7 +326,7 @@ mod test {
     fn subscriptions_try_from_into_tungstenite() {
         use crate::Subscriptions;
 
-        let subscriptions = Subscriptions(vec!["a".into(), "b".into()]);
+        let subscriptions = Subscriptions::from(vec!["a", "b"]);
 
         let msg: tungstenite::Message = subscriptions.clone().try_into().unwrap();
         let subscriptions2: Subscriptions = msg.try_into().unwrap();
