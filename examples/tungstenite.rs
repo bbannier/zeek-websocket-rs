@@ -20,7 +20,7 @@ fn main() {
                 topic: "/ping".into(),
                 data: Data::Event(Event {
                     name: "ping".into(),
-                    args: vec![Value::String("hohi".into())],
+                    args: vec![Value::from("hohi")],
                     metadata: vec![],
                 }),
             }
@@ -49,7 +49,7 @@ fn main() {
                         topic: "/ping".into(),
                         data: Data::Event(Event {
                             name: "pong".into(),
-                            args: vec![Value::String("yeah".into())],
+                            args: vec![Value::from("yeah")],
                             metadata: vec![],
                         }),
                     }

@@ -47,7 +47,7 @@ async fn main() {
                     topic: TOPIC.into(),
                     data: Data::Event(Event {
                         name: "ping".into(),
-                        args: vec![Value::String("hohi".into())],
+                        args: vec![Value::from("hohi")],
                         metadata: vec![],
                     }),
                 }

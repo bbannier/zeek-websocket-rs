@@ -9,7 +9,12 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, net::IpAddr, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+    net::IpAddr,
+    str::FromStr,
+};
 use thiserror::Error;
 
 #[doc(no_inline)]
@@ -40,6 +45,70 @@ pub enum Value {
     Vector(Vec<Value>),
     Set(Vec<Value>),
     Table(Vec<TableEntry>),
+}
+
+macro_rules! impl_from_T {
+    ($t:ty, $c:path) => {
+        impl From<$t> for Value {
+            fn from(value: $t) -> Self {
+                $c(value.into())
+            }
+        }
+    };
+}
+
+impl_from_T!(bool, Value::Boolean);
+impl_from_T!(u64, Value::Count);
+impl_from_T!(u32, Value::Count);
+impl_from_T!(u16, Value::Count);
+impl_from_T!(u8, Value::Count);
+impl_from_T!(i64, Value::Integer);
+impl_from_T!(i32, Value::Integer);
+impl_from_T!(i16, Value::Integer);
+impl_from_T!(i8, Value::Integer);
+impl_from_T!(f64, Value::Real);
+impl_from_T!(f32, Value::Real);
+impl_from_T!(TimeDelta, Value::Timespan);
+impl_from_T!(DateTime, Value::Timestamp);
+impl_from_T!(String, Value::String);
+impl_from_T!(&str, Value::String);
+impl_from_T!(IpAddr, Value::Address);
+impl_from_T!(IpNetwork, Value::Subnet);
+impl_from_T!(Port, Value::Port);
+
+impl From<()> for Value {
+    #[allow(clippy::ignored_unit_patterns)]
+    fn from(_: ()) -> Self {
+        Value::None
+    }
+}
+
+impl<T> From<Vec<T>> for Value
+where
+    T: Into<Value>,
+{
+    fn from(value: Vec<T>) -> Self {
+        Value::Vector(value.into_iter().map(Into::into).collect())
+    }
+}
+
+impl<T> From<HashSet<T>> for Value
+where
+    T: Into<Value>,
+{
+    fn from(value: HashSet<T>) -> Self {
+        Value::Set(value.into_iter().map(Into::into).collect())
+    }
+}
+
+impl<K, V> From<HashMap<K, V>> for Value
+where
+    K: Into<Value>,
+    V: Into<Value>,
+{
+    fn from(value: HashMap<K, V>) -> Self {
+        Value::Table(value.into_iter().map(Into::into).collect())
+    }
 }
 
 /// Error enum for Zeek-related deserialization errors.
@@ -280,6 +349,16 @@ impl TableEntry {
     }
 }
 
+impl<K, V> From<(K, V)> for TableEntry
+where
+    K: Into<Value>,
+    V: Into<Value>,
+{
+    fn from((key, value): (K, V)) -> Self {
+        TableEntry::new(key.into(), value.into())
+    }
+}
+
 #[cfg(test)]
 mod test {
     #![allow(clippy::unwrap_used)]
@@ -289,43 +368,44 @@ mod test {
     use crate::types::{ParseError, Port, Protocol, TableEntry, Value};
     use chrono::TimeDelta;
     use ipnetwork::IpNetwork;
+    use iso8601::DateTime;
     use serde_json::json;
 
     #[test]
     fn value_from_json() {
         assert_eq!(
-            Value::None,
+            Value::from(()),
             serde_json::from_value(json!({"@data-type": "none"})).unwrap()
         );
         assert_eq!(
-            Value::Boolean(true),
+            Value::from(true),
             serde_json::from_value(json!({"@data-type": "boolean", "data": true})).unwrap()
         );
         assert_eq!(
-            Value::Count(123),
+            Value::from(123u64),
             serde_json::from_value(json!({"@data-type": "count", "data": 123})).unwrap()
         );
         assert_eq!(
-            Value::Integer(-7),
+            Value::from(-7),
             serde_json::from_value(json!({"@data-type": "integer", "data": -7})).unwrap()
         );
         assert_eq!(
-            Value::Real(7.5),
+            Value::from(7.5),
             serde_json::from_value(json!({"@data-type": "real", "data": 7.5})).unwrap()
         );
         assert_eq!(
-            Value::Timespan(TimeDelta::milliseconds(1500)),
+            Value::from(TimeDelta::milliseconds(1500)),
             serde_json::from_value(json!({"@data-type": "timespan", "data": "1500ms"})).unwrap()
         );
         assert_eq!(
-            Value::Timestamp("2022-04-10T07:00:00.000".parse().unwrap()),
+            Value::from("2022-04-10T07:00:00.000".parse::<DateTime>().unwrap()),
             serde_json::from_value(
                 json!({"@data-type": "timestamp", "data": "2022-04-10T07:00:00.000"})
             )
             .unwrap()
         );
         assert_eq!(
-            Value::String("Hello World!".into()),
+            Value::from("Hello World!"),
             serde_json::from_value(json!({"@data-type": "string", "data": "Hello World!"}))
                 .unwrap()
         );
@@ -334,20 +414,20 @@ mod test {
             serde_json::from_value(json!({"@data-type": "enum-value", "data": "foo"})).unwrap()
         );
         assert_eq!(
-            Value::Address(IpAddr::from_str("2001:db8::").unwrap()),
+            Value::from(IpAddr::from_str("2001:db8::").unwrap()),
             serde_json::from_value(json!({"@data-type": "address", "data": "2001:db8::"})).unwrap()
         );
         assert_eq!(
-            Value::Subnet(IpNetwork::from_str("255.255.255.0/24").unwrap()),
+            Value::from(IpNetwork::from_str("255.255.255.0/24").unwrap()),
             serde_json::from_value(json!({"@data-type": "subnet", "data": "255.255.255.0/24"}))
                 .unwrap()
         );
         assert_eq!(
-            Value::Port(Port::from_str("8080/tcp").unwrap()),
+            Value::from(Port::from_str("8080/tcp").unwrap()),
             serde_json::from_value(json!({"@data-type": "port", "data": "8080/tcp"})).unwrap()
         );
         assert_eq!(
-            Value::Vector(vec![Value::Count(42), Value::Integer(23)]),
+            Value::from(vec![Value::from(42u8), 23i32.into()]),
             serde_json::from_value(json!({
                 "@data-type": "vector",
                 "data": [
@@ -363,10 +443,7 @@ mod test {
             .unwrap()
         );
         assert_eq!(
-            Value::Set(vec![
-                Value::String("foo".into()),
-                Value::String("bar".into())
-            ]),
+            Value::Set(vec!["foo".into(), "bar".into()]),
             serde_json::from_value(json!({
                 "@data-type": "set",
                 "data": [
@@ -383,14 +460,8 @@ mod test {
         );
         assert_eq!(
             Value::Table(vec![
-                TableEntry::new(
-                    Value::String("first-name".into()),
-                    Value::String("John".into())
-                ),
-                TableEntry::new(
-                    Value::String("last-name".into()),
-                    Value::String("Doe".into())
-                )
+                ("first-name", "John").into(),
+                ("last-name", "Doe").into()
             ]),
             serde_json::from_value(json!({
                "@data-type": "table",
@@ -478,13 +549,10 @@ mod test {
                 }
             }]}))
             .unwrap(),
-            Value::Table(vec![TableEntry::new(
-                Value::String("one".into()),
-                Value::Count(1)
-            )])
+            Value::Table(vec![("one", 1u8).into()])
         );
 
-        let t = TableEntry::new(Value::String("one".into()), Value::Count(1));
+        let t = TableEntry::new("one".into(), 1u8.into());
         assert_eq!(t.key().clone(), Value::String("one".into()));
         assert_eq!(t.value().clone(), Value::Count(1));
     }
@@ -494,38 +562,38 @@ mod test {
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "1ns" }))
                 .unwrap(),
-            Value::Timespan(TimeDelta::nanoseconds(1))
+            Value::from(TimeDelta::nanoseconds(1))
         );
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "1ms" }))
                 .unwrap(),
-            Value::Timespan(TimeDelta::milliseconds(1))
+            Value::from(TimeDelta::milliseconds(1))
         );
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "1s" }))
                 .unwrap(),
-            Value::Timespan(TimeDelta::seconds(1))
+            Value::from(TimeDelta::seconds(1))
         );
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "1min" }))
                 .unwrap(),
-            Value::Timespan(TimeDelta::minutes(1))
+            Value::from(TimeDelta::minutes(1))
         );
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "1h" }))
                 .unwrap(),
-            Value::Timespan(TimeDelta::hours(1))
+            Value::from(TimeDelta::hours(1))
         );
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "1d" }))
                 .unwrap(),
-            Value::Timespan(TimeDelta::days(1))
+            Value::from(TimeDelta::days(1))
         );
 
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "-42s" }))
                 .unwrap(),
-            Value::Timespan(TimeDelta::seconds(-42))
+            Value::from(TimeDelta::seconds(-42))
         );
 
         assert_eq!(
@@ -544,15 +612,15 @@ mod test {
         );
 
         assert_eq!(
-            serde_json::to_string(&Value::Timespan(TimeDelta::nanoseconds(12))).unwrap(),
+            serde_json::to_string(&Value::from(TimeDelta::nanoseconds(12))).unwrap(),
             serde_json::to_string(&json!({"@data-type": "timespan", "data": "12ns"})).unwrap()
         );
         assert_eq!(
-            serde_json::to_string(&Value::Timespan(TimeDelta::seconds(12))).unwrap(),
+            serde_json::to_string(&Value::from(TimeDelta::seconds(12))).unwrap(),
             serde_json::to_string(&json!({"@data-type": "timespan", "data": "12s"})).unwrap()
         );
         assert_eq!(
-            serde_json::to_string(&Value::Timespan(
+            serde_json::to_string(&Value::from(
                 TimeDelta::weeks(52 * 100_000_000) + TimeDelta::nanoseconds(1)
             ))
             .err()
