@@ -18,19 +18,11 @@ event ping(msg: string)
 	Cluster::publish(TOPIC, evt);
 	}
 
-event loop()
-	{
-	# local evt = Cluster::make_event(ping, "hi!");
-	# Cluster::publish(TOPIC, evt);
-	# schedule 1secs { loop() };
-	}
-
 event zeek_init()
 	{
 	Cluster::listen_websocket([$listen_host="127.0.0.1", $listen_port=8080/tcp]);
 	Cluster::subscribe(TOPIC);
 
-	event loop();
 	}
 
 ##########################################
