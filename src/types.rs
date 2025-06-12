@@ -5,12 +5,21 @@
 //!
 //! ```
 //! # use zeek_websocket::types::Value;
-//! let value = Value::Count(4711);
+//! let value = Value::Count(0);
+//! ```
+//!
+//! We provide implementations of `TryFrom` to go from Zeek values to Rust types, e.g.,
+//!
+//! ```
+//! # use zeek_websocket::types::Value;
+//! assert_eq!(Value::Count(0).try_into(), Ok(0u64));
+//! assert_eq!(u16::try_from(Value::Count(0)), Ok(0u16));
 //! ```
 
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
+    error::Error,
     fmt::Display,
     net::IpAddr,
     str::FromStr,
@@ -57,24 +66,43 @@ macro_rules! impl_from_T {
     };
 }
 
-impl_from_T!(bool, Value::Boolean);
-impl_from_T!(u64, Value::Count);
-impl_from_T!(u32, Value::Count);
-impl_from_T!(u16, Value::Count);
-impl_from_T!(u8, Value::Count);
-impl_from_T!(i64, Value::Integer);
-impl_from_T!(i32, Value::Integer);
-impl_from_T!(i16, Value::Integer);
-impl_from_T!(i8, Value::Integer);
-impl_from_T!(f64, Value::Real);
+macro_rules! impl_T {
+    ($t:ty, $c:path) => {
+        impl_from_T!($t, $c);
+
+        impl TryFrom<Value> for $t {
+            type Error = ConversionError;
+
+            fn try_from(value: Value) -> Result<Self, Self::Error> {
+                let $c(x) = value else {
+                    return Err(ConversionError::MismatchedTypes);
+                };
+
+                x.try_into()
+                    .map_err(|e| ConversionError::Domain(Box::new(e)))
+            }
+        }
+    };
+}
+
+impl_T!(bool, Value::Boolean);
+impl_T!(u64, Value::Count);
+impl_T!(u32, Value::Count);
+impl_T!(u16, Value::Count);
+impl_T!(u8, Value::Count);
+impl_T!(i64, Value::Integer);
+impl_T!(i32, Value::Integer);
+impl_T!(i16, Value::Integer);
+impl_T!(i8, Value::Integer);
+impl_T!(f64, Value::Real);
 impl_from_T!(f32, Value::Real);
-impl_from_T!(TimeDelta, Value::Timespan);
-impl_from_T!(DateTime, Value::Timestamp);
-impl_from_T!(String, Value::String);
+impl_T!(TimeDelta, Value::Timespan);
+impl_T!(DateTime, Value::Timestamp);
+impl_T!(String, Value::String);
 impl_from_T!(&str, Value::String);
-impl_from_T!(IpAddr, Value::Address);
-impl_from_T!(IpNetwork, Value::Subnet);
-impl_from_T!(Port, Value::Port);
+impl_T!(IpAddr, Value::Address);
+impl_T!(IpNetwork, Value::Subnet);
+impl_T!(Port, Value::Port);
 
 impl From<()> for Value {
     #[allow(clippy::ignored_unit_patterns)]
@@ -132,6 +160,27 @@ pub enum ParseError {
 pub enum SerializationError {
     #[error("value not representable: {0}")]
     NotRepresentable(String),
+}
+
+/// Error enum for errors related to conversions from a Zeek value.
+#[derive(Error, Debug)]
+pub enum ConversionError {
+    #[error("cannot convert value to target type")]
+    MismatchedTypes,
+
+    #[error("conversion to target type failed")]
+    Domain(Box<dyn Error>),
+}
+
+impl PartialEq for ConversionError {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            // Not ideal, but just compare stringifications of the errors.
+            (Self::Domain(l0), Self::Domain(r0)) => l0.to_string() == r0.to_string(),
+
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
 }
 
 /// A Zeek port which holds both a port number and a protocol identifier.
@@ -363,9 +412,9 @@ where
 mod test {
     #![allow(clippy::unwrap_used)]
 
-    use std::{net::IpAddr, str::FromStr};
+    use std::{i64, net::IpAddr, str::FromStr};
 
-    use crate::types::{ParseError, Port, Protocol, TableEntry, Value};
+    use crate::types::{ConversionError, ParseError, Port, Protocol, TableEntry, Value};
     use chrono::TimeDelta;
     use ipnetwork::IpNetwork;
     use iso8601::DateTime;
@@ -490,6 +539,44 @@ mod test {
             }))
             .unwrap()
         );
+    }
+
+    #[test]
+    fn try_into() {
+        assert_eq!(Value::from(true).try_into(), Ok(true));
+        assert_eq!(Value::from(0u64).try_into(), Ok(0u64));
+        assert_eq!(Value::from(0u64).try_into(), Ok(0u32));
+        assert_eq!(Value::from(0u64).try_into(), Ok(0u16));
+        assert_eq!(Value::from(0u64).try_into(), Ok(0u8));
+        assert_eq!(Value::from(0).try_into(), Ok(0i64));
+        assert_eq!(Value::from(0).try_into(), Ok(0i32));
+        assert_eq!(Value::from(0).try_into(), Ok(0i16));
+        assert_eq!(Value::from(0).try_into(), Ok(0i8));
+        assert_eq!(Value::from(0.).try_into(), Ok(0.));
+
+        assert_eq!(
+            Value::from(TimeDelta::seconds(1)).try_into(),
+            Ok(TimeDelta::seconds(1))
+        );
+        assert_eq!(
+            Value::from(DateTime::default()).try_into(),
+            Ok(DateTime::default())
+        );
+
+        let addr = IpAddr::from_str("::0").unwrap();
+        assert_eq!(Value::from(addr).try_into(), Ok(addr));
+
+        let network = IpNetwork::new(addr, 8).unwrap();
+        assert_eq!(Value::from(network).try_into(), Ok(network));
+
+        let port = Port::new(42, Protocol::TCP);
+        assert_eq!(Value::from(port).try_into(), Ok(port));
+
+        let not_string: Result<String, _> = Value::from(0).try_into();
+        assert_eq!(not_string, Err(ConversionError::MismatchedTypes));
+
+        let outside_range: Result<i8, _> = Value::from(i64::MAX).try_into();
+        assert!(matches!(outside_range, Err(ConversionError::Domain(_))));
     }
 
     #[test]
