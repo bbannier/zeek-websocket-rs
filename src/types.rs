@@ -1,4 +1,4 @@
-//! # Basic types of Zeek's WebSocket API
+//! # Types of Zeek's WebSocket API
 //!
 //! The main type of this module is [`Value`] which holds values of the Zeek API. Use its enum
 //! variants to create values of specific types, e.g.,

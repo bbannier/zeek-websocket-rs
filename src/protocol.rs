@@ -1,3 +1,57 @@
+//! # Sans I/O-style protocol wrapper for the Zeek API
+//!
+//! Instead of providing a full-fledged client [`Connection`] encapsulates the Zeek WebSocket
+//! protocol [sans I/O style](https://sans-io.readthedocs.io/). It provides the following methods:
+//!
+//! - [`Connection::handle_input`] injects data received over a network connection into the
+//!   `Connection` object
+//! - [`Connection::enqueue`] to enqueue a message for Zeek
+//! - [`Connection::incoming`] gets the next message received from Zeek
+//! - [`Connection::outgoing`] gets the next data payload for sending to Zeek
+//!
+//! A full client implementation will typically implement some form of event loop.
+//!
+//! ## Example
+//!
+//! ```no_run
+//! use zeek_websocket::*;
+//!
+//! // Open an underlying WebSocket connection to a Zeek endpoint.
+//! let (mut socket, _) = tungstenite::connect("ws://127.0.0.1:8080/v1/messages/json").unwrap();
+//!
+//! // Create a connection.
+//! let topic = "/ping";
+//! let mut conn = Connection::new(Subscriptions::from(vec![topic]));
+//!
+//! // The event loop.
+//! loop {
+//!     // If we have any outgoing messages send at least one.
+//!     if let Some(data) = conn.outgoing() {
+//!         socket.send(tungstenite::Message::binary(data)).unwrap();
+//!     }
+//!
+//!     // Receive the next message and handle it.
+//!     let message = socket.read().unwrap();
+//!     if let Ok(msg) = message.try_into() {
+//!         conn.handle_input(msg);
+//!     }
+//!
+//!     // If we received a `ping` event, respond with a `pong`.
+//!     if let Some(Message::DataMessage {
+//!         data: Data::Event(event),
+//!         ..
+//!     }) = conn.incoming()
+//!     {
+//!         if event.name == "ping" {
+//!             conn.enqueue(Message::new_data(
+//!                 topic,
+//!                 Event::new("pong", event.args.clone()),
+//!             ));
+//!         }
+//!     }
+//! }
+//! ```
+
 use std::collections::VecDeque;
 
 use thiserror::Error;
@@ -5,59 +59,9 @@ use tungstenite::Bytes;
 
 use crate::types::{Message, Subscriptions};
 
-/// Sans I/O-style bindings for the Zeek API
+/// Protocol wrapper for a Zeek WebSocket connection.
 ///
-/// Instead of providing a full-fledged client `Connection` encapsulates the Zeek WebSocket
-/// protocol [sans I/O style](https://sans-io.readthedocs.io/). We provide the following methods:
-///
-/// - [`Connection::handle_input`] injects data received over a network connection into the
-///   `Connection` object
-/// - [`Connection::enqueue`] to enqueue a message for Zeek
-/// - [`Connection::incoming`] gets the next message received from Zeek
-/// - [`Connection::outgoing`] gets the next data payload for sending to Zeek
-///
-/// A full client implementation will typically implement some form of event loop.
-///
-/// ## Example
-///
-/// ```no_run
-/// use zeek_websocket::*;
-///
-/// // Open an underlying WebSocket connection to a Zeek endpoint.
-/// let (mut socket, _) = tungstenite::connect("ws://127.0.0.1:8080/v1/messages/json").unwrap();
-///
-/// // Create a connection.
-/// let topic = "/ping";
-/// let mut conn = Connection::new(Subscriptions::from(vec![topic]));
-///
-/// // The event loop.
-/// loop {
-///     // If we have any outgoing messages send at least one.
-///     if let Some(data) = conn.outgoing() {
-///         socket.send(tungstenite::Message::binary(data)).unwrap();
-///     }
-///
-///     // Receive the next message and handle it.
-///     let message = socket.read().unwrap();
-///     if let Ok(msg) = message.try_into() {
-///         conn.handle_input(msg);
-///     }
-///
-///     // If we received a `ping` event, respond with a `pong`.
-///     if let Some(Message::DataMessage {
-///         data: Data::Event(event),
-///         ..
-///     }) = conn.incoming()
-///     {
-///         if event.name == "ping" {
-///             conn.enqueue(Message::new_data(
-///                 topic,
-///                 Event::new("pong", event.args.clone()),
-///             ));
-///         }
-///     }
-/// }
-/// ```
+/// See the [module documentation](crate::protocol) for an introduction
 pub struct Connection {
     state: State,
     subscriptions: Subscriptions,
