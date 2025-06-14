@@ -7,31 +7,59 @@ repository = "https://github.com/bbannier/zeek-websocket-rs"
 rust-version = "1.85"
 
 [features]
-default = ["tungstenite"]
+default = ["tungstenite", "derive"]
 
 ## Enables conversions to and from [`tungstenite`](https://docs.rs/tungstenite/) messages.
 tungstenite = ["dep:tungstenite", "dep:serde_json"]
 
+## Enables derive macros for converting to and from [`zeek_websocket_types::Value`]
+derive = ["dep:zeek-websocket-derive"]
+
 [dependencies]
-chrono = { version = "0.4.41", default-features = false }
-document-features = "0.2.11"
-if_chain = "1.0.2"
-ipnetwork = { version = "0.21.1", features = ["serde"] }
-iso8601 = { version = "0.6.3", features = ["serde"] }
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = { version = "1.0.140", optional = true }
-thiserror = "2.0.12"
-tungstenite = { version = "0.26.2", optional = true }
+document-features = { workspace = true }
+serde_json = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tungstenite = { workspace = true, optional = true }
+zeek-websocket-derive = { workspace = true, optional = true }
+zeek-websocket-types = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
+criterion = { workspace = true }
+futures-util = { workspace = true }
+ipnetwork = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio-tungstenite = { workspace = true }
+tungstenite = { workspace = true, features = ["native-tls"] }
+ws-mock = { workspace = true }
+
+[workspace]
+members = ["crates/zeek-websocket-derive", "crates/zeek-websocket-types"]
+
+[workspace.dependencies]
 anyhow = "1.0.98"
+chrono = { version = "0.4.41", default-features = false }
 criterion = { version = "2.10.1", default-features = false, features = ["async_tokio", "html_reports", "plotters"], package = "codspeed-criterion-compat" }
+document-features = "0.2.11"
 futures-util = "0.3.31"
+if_chain = "1.0.2"
+ipnetwork = "0.21.1"
+iso8601 = "0.6.3"
+proc-macro-error2 = "2.0.1"
+proc-macro2 = "1.0.95"
+quote = "1.0.40"
+serde = "1.0.219"
 serde_json = "1.0.140"
-tokio = { version = "1.45.0", features = ["macros", "rt-multi-thread"] }
+syn = { version = "2.0.103", features = ["derive", "parsing", "proc-macro", "printing"], default-features = false }
+thiserror = "2.0.12"
+tokio = "1.45.0"
 tokio-tungstenite = "0.26.2"
-tungstenite = { version = "0.26.2", features = ["native-tls"] }
+trybuild = "1.0.105"
+tungstenite = "0.26.2"
 ws-mock = "0.3.1"
+zeek-websocket-derive = { path = "crates/zeek-websocket-derive" }
+zeek-websocket-types = { path = "crates/zeek-websocket-types" }
 
 [[example]]
 name = "tungstenite"

@@ -7,14 +7,12 @@ use std::{
     time::Duration,
 };
 
-use chrono::TimeDelta;
 use criterion::*;
-use ipnetwork::{IpNetwork, Ipv4Network};
-use iso8601::DateTime;
+use ipnetwork::Ipv4Network;
 use tungstenite::{client::IntoClientRequest, connect};
 use zeek_websocket::{
     Data, Event, Message, Subscriptions,
-    types::{Port, Protocol, Value},
+    types::{DateTime, IpNetwork, Port, Protocol, TimeDelta, Value},
 };
 
 fn serialize(c: &mut Criterion) {
