@@ -58,14 +58,10 @@ impl Message {
 }
 
 #[cfg(feature = "tungstenite")]
-impl TryInto<tungstenite::Message> for Message {
-    type Error = serde_json::Error;
-
-    fn try_into(
-        self,
-    ) -> Result<tungstenite::Message, <Message as TryInto<tungstenite::Message>>::Error> {
-        let msg = serde_json::to_string(&self)?;
-        Ok(msg.into())
+impl From<Message> for tungstenite::Message {
+    fn from(value: Message) -> Self {
+        let msg = serde_json::to_string(&value).expect("conversion should never fail");
+        msg.into()
     }
 }
 
@@ -217,12 +213,10 @@ where
 }
 
 #[cfg(feature = "tungstenite")]
-impl TryInto<tungstenite::Message> for Subscriptions {
-    type Error = serde_json::Error;
-
-    fn try_into(self) -> Result<tungstenite::Message, Self::Error> {
-        let msg = serde_json::to_string(&self)?;
-        Ok(msg.into())
+impl From<Subscriptions> for tungstenite::Message {
+    fn from(value: Subscriptions) -> Self {
+        let msg = serde_json::to_string(&value).expect("conversion should never fail");
+        msg.into()
     }
 }
 
