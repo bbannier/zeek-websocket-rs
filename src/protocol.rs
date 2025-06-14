@@ -56,8 +56,9 @@ use std::collections::VecDeque;
 
 use thiserror::Error;
 use tungstenite::Bytes;
+use zeek_websocket_types::Message;
 
-use crate::types::{Message, Subscriptions};
+use crate::types::Subscriptions;
 
 /// Protocol wrapper for a Zeek WebSocket connection.
 ///

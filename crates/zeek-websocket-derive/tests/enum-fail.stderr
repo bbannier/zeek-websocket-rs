@@ -1,0 +1,5 @@
+error: only structs can derive ZeekType
+ --> tests/enum-fail.rs:4:1
+  |
+4 | enum E {
+  | ^^^^
