@@ -1,45 +1,37 @@
 use tungstenite::connect;
-use zeek_websocket::{Data, Event, Message, Subscriptions};
+use zeek_websocket::{Data, Event, Message, Subscriptions, protocol::Connection};
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let uri = "ws://127.0.0.1:8080/v1/messages/json";
 
-    let (mut socket, _) = connect(uri).unwrap();
+    let topic = "/ping";
 
-    // Subscribe client.
-    let subscriptions = Subscriptions::from(vec!["/ping"]);
-    socket.send(subscriptions.try_into().unwrap()).unwrap();
+    let (mut socket, _) = connect(uri)?;
+    let mut conn = Connection::new(Subscriptions::from(vec![topic]));
 
-    // Write event.
-    socket
-        .send(
-            Message::new_data("/ping", Event::new("ping", vec!["hohi"]))
-                .try_into()
-                .unwrap(),
-        )
-        .unwrap();
+    loop {
+        // If we have any outgoing messages send at least one.
+        if let Some(data) = conn.outgoing() {
+            socket.send(tungstenite::Message::binary(data))?;
+        }
 
-    while let Ok(data) = socket.read() {
-        let Ok(msg) = data.try_into() else {
-            continue;
-        };
+        // Receive the next message and handle it.
+        if let Ok(msg) = socket.read()?.try_into() {
+            conn.handle_input(msg)?;
+        }
 
-        if let Message::DataMessage {
+        // If we received a `ping` event, respond with a `pong`.
+        if let Some(Message::DataMessage {
             data: Data::Event(event),
             ..
-        } = msg
+        }) = conn.incoming()
         {
-            if event.name != "ping" {
-                continue;
+            if event.name == "ping" {
+                conn.enqueue(Message::new_data(
+                    topic,
+                    Event::new("pong", event.args.clone()),
+                ));
             }
-
-            socket
-                .send(
-                    Message::new_data("/ping", Event::new("pong", vec!["yeah"]))
-                        .try_into()
-                        .unwrap(),
-                )
-                .unwrap();
         }
     }
 }
