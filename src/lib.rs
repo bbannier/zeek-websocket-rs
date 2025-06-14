@@ -4,8 +4,9 @@
 //! WebSocket API.
 //!
 //! The main type of this crate is [`protocol::Connection`] which
-//! models Zeek's WebSocket protocol. `Connection` depends on [`tungstenite`]
-//! and uses lower-level data types defined in [`types`].
+//! models Zeek's WebSocket protocol. `Connection` depends on
+//! [`tungstenite`](https://docs.rs/tungstenite/) and uses lower-level data types defined in
+//! [`types`].
 //!
 //! Types in [`types`] can be used independently from `Connection` with any
 //! backend.
