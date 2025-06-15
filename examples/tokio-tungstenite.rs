@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
 
     const TOPIC: &str = "/ping";
 
-    let (mut inbox, mut outbox) = Binding::new(Subscriptions::from(vec![TOPIC])).split();
+    let (mut inbox, mut outbox) = Binding::new(Subscriptions::from(&[TOPIC])).split();
 
     let num_sent = Arc::new(AtomicU64::new(0));
     let num_received = Arc::new(AtomicU64::new(0));

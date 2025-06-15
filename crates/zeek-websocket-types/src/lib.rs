@@ -584,10 +584,28 @@ pub struct Subscriptions(pub Vec<String>);
 
 impl<T> From<Vec<T>> for Subscriptions
 where
-    T: Into<String>,
+    T: ToString,
 {
     fn from(value: Vec<T>) -> Self {
-        Subscriptions(value.into_iter().map(Into::into).collect())
+        Subscriptions(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl<T> From<&[T]> for Subscriptions
+where
+    T: ToString,
+{
+    fn from(value: &[T]) -> Self {
+        Subscriptions(value.iter().map(ToString::to_string).collect())
+    }
+}
+
+impl<T, const N: usize> From<&[T; N]> for Subscriptions
+where
+    T: ToString,
+{
+    fn from(value: &[T; N]) -> Self {
+        Subscriptions(value.iter().map(ToString::to_string).collect())
     }
 }
 
@@ -702,7 +720,7 @@ mod test {
     #[cfg(feature = "tungstenite")]
     #[test]
     fn subscriptions_try_from_into_tungstenite() {
-        let subscriptions = Subscriptions::from(vec!["a", "b"]);
+        let subscriptions = Subscriptions::from(&["a", "b"]);
 
         let msg: tungstenite::Message = subscriptions.clone().try_into().unwrap();
         let subscriptions2: Subscriptions = msg.try_into().unwrap();

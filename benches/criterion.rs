@@ -123,7 +123,7 @@ fn zeek_roundtrip(c: &mut Criterion) {
 
         // Subscribe the client.
         stream
-            .send(Subscriptions::from(vec![topic]).try_into().unwrap())
+            .send(Subscriptions::from(&[topic]).try_into().unwrap())
             .unwrap();
 
         b.iter(|| {

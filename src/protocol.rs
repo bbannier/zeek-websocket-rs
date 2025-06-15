@@ -21,7 +21,7 @@
 //!
 //! // Create a connection.
 //! let topic = "/ping";
-//! let mut conn = Binding::new(Subscriptions::from(vec![topic]));
+//! let mut conn = Binding::new(Subscriptions::from(&[topic]));
 //!
 //! // The event loop.
 //! loop {
@@ -71,13 +71,22 @@ enum State {
 
 impl Binding {
     /// Create a new `Binding` with the given [`Subscriptions`].
+    ///
+    /// ```
+    /// # use zeek_websocket::Binding;
+    /// let conn = Binding::new(&["topic"]);
+    /// ```
     #[must_use]
-    pub fn new(subscriptions: Subscriptions) -> Self {
+    pub fn new<S>(subscriptions: S) -> Self
+    where
+        S: Into<Subscriptions>,
+    {
+        let subscriptions = subscriptions.into();
         Self {
             state: State::Subscribing,
-            subscriptions: subscriptions.clone(),
             inbox: Inbox(VecDeque::new()),
-            outbox: Outbox(VecDeque::from([subscriptions.into()])),
+            outbox: Outbox(VecDeque::from([subscriptions.clone().into()])),
+            subscriptions,
         }
     }
 
@@ -286,7 +295,7 @@ mod test {
             .await
             .unwrap();
 
-        let mut conn = Binding::new(Subscriptions::from(vec![topic]));
+        let mut conn = Binding::new(Subscriptions::from(&[topic]));
 
         // Send the subscription.
         subscribe(&conn.outgoing().unwrap(), &mut transport).await;
@@ -332,7 +341,7 @@ mod test {
     #[tokio::test]
     async fn send() {
         let (mut transport, ..) = mock().await.unwrap();
-        let mut conn = Binding::new(Subscriptions::from(vec!["foo"]));
+        let mut conn = Binding::new(Subscriptions::from(&["foo"]));
 
         // Send the subscription.
         subscribe(&conn.outgoing().unwrap(), &mut transport).await;
@@ -353,7 +362,7 @@ mod test {
     #[tokio::test]
     async fn split() {
         let (mut transport, ..) = mock().await.unwrap();
-        let (mut inbox, mut outbox) = Binding::new(Subscriptions::from(vec!["foo"])).split();
+        let (mut inbox, mut outbox) = Binding::new(Subscriptions::from(&["foo"])).split();
 
         // Send the subscription.
         transport
@@ -376,12 +385,12 @@ mod test {
 
     #[tokio::test]
     async fn resubscribe() {
-        let mut conn = Binding::new(Subscriptions::from(vec!["foo"]));
+        let mut conn = Binding::new(Subscriptions::from(&["foo"]));
 
         // The initial message is the subscription to `["foo"]`.
         let message = tungstenite::Message::binary(conn.outgoing().unwrap());
         let subscription = Subscriptions::try_from(message).unwrap();
-        assert_eq!(subscription, Subscriptions::from(vec!["foo"]));
+        assert_eq!(subscription, Subscriptions::from(&["foo"]));
 
         // Sent a message on `"bar"` to which we are not subscribed.
         let event = Message::new_data("bar", Event::new("ping", vec!["ping on 'bar'"]));
@@ -390,7 +399,7 @@ mod test {
         // We expect to see a resubscription which adds `"bar"`.
         let message = tungstenite::Message::binary(conn.outgoing().unwrap());
         let ack = Subscriptions::try_from(message).unwrap();
-        assert_eq!(ack, Subscriptions::from(vec!["foo", "bar"]));
+        assert_eq!(ack, Subscriptions::from(&["foo", "bar"]));
 
         // The original message follows after.
         let message = tungstenite::Message::binary(conn.outgoing().unwrap());
@@ -402,7 +411,7 @@ mod test {
     async fn duplicate_ack() {
         let (mut transport, rx, _) = mock().await.unwrap();
 
-        let mut conn = Binding::new(Subscriptions::from(vec!["foo"]));
+        let mut conn = Binding::new(Subscriptions::from(&["foo"]));
 
         // The initial message we received is the ACK for subscription. Reinject it so we receive
         // multiple ACKs.
@@ -446,7 +455,7 @@ mod test {
 
     #[test]
     fn enqueue_event() {
-        let mut conn = Binding::new(Subscriptions::from(vec!["foo"]));
+        let mut conn = Binding::new(Subscriptions::from(&["foo"]));
         // Consume the subscription.
         conn.outgoing().unwrap();
 
