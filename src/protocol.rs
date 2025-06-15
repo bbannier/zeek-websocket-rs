@@ -37,11 +37,7 @@
 //!     }
 //!
 //!     // If we received a `ping` event, respond with a `pong`.
-//!     if let Some(Message::DataMessage {
-//!         data: Data::Event(event),
-//!         ..
-//!     }) = conn.incoming()
-//!     {
+//!     if let Some((_topic, event)) = conn.next_event() {
 //!         if event.name == "ping" {
 //!             conn.enqueue(Message::new_data(
 //!                 topic,
@@ -56,7 +52,7 @@ use std::collections::VecDeque;
 
 use thiserror::Error;
 use tungstenite::Bytes;
-use zeek_websocket_types::Message;
+use zeek_websocket_types::{Data, Event, Message};
 
 use crate::types::Subscriptions;
 
@@ -121,6 +117,13 @@ impl Binding {
         self.outbox.next_data()
     }
 
+    /// Get the next incoming event.
+    ///
+    /// In contrast to [`Binding::incoming`] this discards any non-`Event` messages which were received.
+    pub fn next_event(&mut self) -> Option<(String, Event)> {
+        self.inbox.next_event()
+    }
+
     /// Enqueue a message for sending.
     ///
     /// If the `Binding` is not already subscribed to the topic
@@ -169,6 +172,23 @@ impl Inbox {
     #[must_use]
     pub fn next_message(&mut self) -> Option<Message> {
         self.0.pop_front()
+    }
+
+    /// Get the next event.
+    ///
+    /// In contrast to [`Inbox::next_message`] this discards any non-`Event` messages which were received.
+    pub fn next_event(&mut self) -> Option<(String, Event)> {
+        while let Some(message) = self.next_message() {
+            if let Message::DataMessage {
+                topic,
+                data: Data::Event(event),
+            } = message
+            {
+                return Some((topic, event));
+            }
+        }
+
+        None
     }
 }
 
@@ -384,5 +404,28 @@ mod test {
             conn.handle_input(ack.clone().try_into().unwrap()),
             Err(ProtocolError::AlreadySubscribed)
         );
+    }
+
+    #[test]
+    fn next_incoming() {
+        let mut conn = Binding::new(Subscriptions(Vec::new()));
+
+        // Put an ACK and an event into the inbox.
+        let _ = conn.handle_input(Message::Ack {
+            endpoint: "".to_string(),
+            version: "".to_string(),
+        });
+        let _ = conn.handle_input(Message::new_data(
+            "topic",
+            Event::new("ping", Vec::<Value>::new()),
+        ));
+
+        // Event though we have an ACK in the inbox `next_event`
+        // discards it and returns the event.
+        let (topic, event) = conn.next_event().unwrap();
+        assert_eq!(topic, "topic");
+        assert_eq!(event.name, "ping");
+
+        assert_eq!(conn.incoming(), None);
     }
 }

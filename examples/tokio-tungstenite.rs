@@ -9,7 +9,7 @@ use std::{
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
 use tokio_tungstenite::connect_async;
 use tungstenite::client::IntoClientRequest;
-use zeek_websocket::{Data, Event, Message, Subscriptions, protocol::Binding};
+use zeek_websocket::{Event, Message, Subscriptions, protocol::Binding};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -60,11 +60,7 @@ async fn main() -> anyhow::Result<()> {
                 inbox.handle(msg);
             }
 
-            if let Some(Message::DataMessage {
-                data: Data::Event(event),
-                ..
-            }) = inbox.next_message()
-            {
+            if let Some((_topic, event)) = inbox.next_event() {
                 if event.name == "pong" {
                     count.fetch_add(1, atomic::Ordering::Relaxed);
                 }

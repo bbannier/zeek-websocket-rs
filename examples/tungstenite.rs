@@ -1,5 +1,5 @@
 use tungstenite::connect;
-use zeek_websocket::{Data, Event, Message, Subscriptions, protocol::Binding};
+use zeek_websocket::{Event, Message, Subscriptions, protocol::Binding};
 
 fn main() -> anyhow::Result<()> {
     let uri = "ws://127.0.0.1:8080/v1/messages/json";
@@ -21,16 +21,12 @@ fn main() -> anyhow::Result<()> {
         }
 
         // If we received a `ping` event, respond with a `pong`.
-        if let Some(Message::DataMessage {
-            data: Data::Event(event),
-            ..
-        }) = conn.incoming()
-        {
-            if event.name == "ping" {
-                conn.enqueue(Message::new_data(
-                    topic,
-                    Event::new("pong", event.args.clone()),
-                ));
+
+        // Wait for the next event.
+        if let Some((topic, Event { name, args, .. })) = conn.next_event() {
+            // If we received a `ping` event, respond with a `pong`.
+            if name == "ping" {
+                conn.enqueue(Message::new_data(topic, Event::new("pong", args)));
             }
         }
     }
