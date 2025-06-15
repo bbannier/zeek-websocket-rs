@@ -1,13 +1,11 @@
 use tungstenite::connect;
-use zeek_websocket::{Event, Message, Subscriptions, protocol::Binding};
+use zeek_websocket::{Event, Subscriptions, protocol::Binding};
 
 fn main() -> anyhow::Result<()> {
     let uri = "ws://127.0.0.1:8080/v1/messages/json";
 
-    let topic = "/ping";
-
     let (mut socket, _) = connect(uri)?;
-    let mut conn = Binding::new(Subscriptions::from(vec![topic]));
+    let mut conn = Binding::new(Subscriptions::from(vec!["/ping"]));
 
     loop {
         // If we have any outgoing messages send at least one.
@@ -26,7 +24,7 @@ fn main() -> anyhow::Result<()> {
         if let Some((topic, Event { name, args, .. })) = conn.next_event() {
             // If we received a `ping` event, respond with a `pong`.
             if name == "ping" {
-                conn.enqueue(Message::new_data(topic, Event::new("pong", args)));
+                conn.enqueue_event(topic, Event::new("pong", args));
             }
         }
     }

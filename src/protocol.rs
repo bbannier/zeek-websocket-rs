@@ -39,10 +39,7 @@
 //!     // If we received a `ping` event, respond with a `pong`.
 //!     if let Some((_topic, event)) = conn.next_event() {
 //!         if event.name == "ping" {
-//!             conn.enqueue(Message::new_data(
-//!                 topic,
-//!                 Event::new("pong", event.args.clone()),
-//!             ));
+//!             conn.enqueue_event(topic, Event::new("pong", event.args.clone()));
 //!         }
 //!     }
 //! }
@@ -145,6 +142,16 @@ impl Binding {
         self.outbox.enqueue(message);
     }
 
+    /// Enqueue an event for sending.
+    ///
+    /// See [`Binding::enqueue`] for the handling of the topic.
+    pub fn enqueue_event<S>(&mut self, topic: S, event: Event)
+    where
+        S: Into<String>,
+    {
+        self.enqueue(Message::new_data(topic.into(), event));
+    }
+
     /// Split the `Binding` into an [`Inbox`] and [`Outbox`].
     ///
     /// <div class="warning">
@@ -207,6 +214,14 @@ impl Outbox {
         M: Into<tungstenite::Message>,
     {
         self.0.push_back(message.into());
+    }
+
+    /// Enqueue an event for sending.
+    pub fn enqueue_event<S>(&mut self, topic: S, event: Event)
+    where
+        S: Into<String>,
+    {
+        self.enqueue(Message::new_data(topic.into(), event));
     }
 }
 
@@ -427,5 +442,25 @@ mod test {
         assert_eq!(event.name, "ping");
 
         assert_eq!(conn.incoming(), None);
+    }
+
+    #[test]
+    fn enqueue_event() {
+        let mut conn = Binding::new(Subscriptions::from(vec!["foo"]));
+        // Consume the subscription.
+        conn.outgoing().unwrap();
+
+        conn.enqueue_event("foo", Event::new("ping", Vec::<Value>::new()));
+        let message =
+            Message::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
+        let Message::DataMessage {
+            topic,
+            data: Data::Event(event),
+        } = message
+        else {
+            panic!()
+        };
+        assert_eq!(topic, "foo");
+        assert_eq!(event.name, "ping");
     }
 }

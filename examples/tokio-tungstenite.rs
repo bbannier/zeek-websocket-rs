@@ -9,7 +9,7 @@ use std::{
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
 use tokio_tungstenite::connect_async;
 use tungstenite::client::IntoClientRequest;
-use zeek_websocket::{Event, Message, Subscriptions, protocol::Binding};
+use zeek_websocket::{Event, Subscriptions, protocol::Binding};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -34,7 +34,7 @@ async fn main() -> anyhow::Result<()> {
         let end = start + duration;
 
         loop {
-            outbox.enqueue(Message::new_data(TOPIC, Event::new("ping", vec!["hohi"])));
+            outbox.enqueue_event(TOPIC, Event::new("ping", vec!["hohi"]));
 
             while let Some(data) = outbox.next_data() {
                 tx.send(tungstenite::Message::binary(data)).await.unwrap();
