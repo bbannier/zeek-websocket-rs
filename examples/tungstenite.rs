@@ -18,8 +18,6 @@ fn main() -> anyhow::Result<()> {
             conn.handle_input(msg)?;
         }
 
-        // If we received a `ping` event, respond with a `pong`.
-
         // Wait for the next event.
         if let Some((topic, Event { name, args, .. })) = conn.next_event() {
             // If we received a `ping` event, respond with a `pong`.
