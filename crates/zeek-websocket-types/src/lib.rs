@@ -1,21 +1,3 @@
-//! # Types of Zeek's WebSocket API
-//!
-//! The main type of this module is [`Value`] which holds values of the Zeek API. Use its enum
-//! variants to create values of specific types, e.g.,
-//!
-//! ```
-//! # use zeek_websocket::types::Value;
-//! let value = Value::Count(0);
-//! ```
-//!
-//! We provide implementations of `TryFrom` to go from Zeek values to Rust types, e.g.,
-//!
-//! ```
-//! # use zeek_websocket::types::Value;
-//! assert_eq!(Value::Count(0).try_into(), Ok(0u64));
-//! assert_eq!(u16::try_from(Value::Count(0)), Ok(0u16));
-//! ```
-
 use if_chain::if_chain;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -639,7 +621,7 @@ mod test {
 
     use std::{i64, net::IpAddr, str::FromStr};
 
-    use crate::types::{
+    use crate::{
         ConversionError, Data, Event, Message, ParseError, Port, Protocol, Subscriptions,
         TableEntry, Value,
     };

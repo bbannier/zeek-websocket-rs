@@ -1,0 +1,22 @@
+[package]
+name = "zeek-websocket-derive"
+version = "0.1.0"
+edition = "2024"
+autotests = false
+
+[dependencies]
+proc-macro-error2 = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }
+zeek-websocket-types = { workspace = true }
+
+[lib]
+proc-macro = true
+
+[dev-dependencies]
+trybuild = { workspace = true, features = ["diff"] }
+
+[[test]]
+name = "tests"
+path = "tests/main.rs"

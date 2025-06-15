@@ -1,0 +1,24 @@
+[package]
+name = "zeek-websocket-types"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["tungstenite"]
+
+## Enables conversions to and from [`tungstenite`](https://docs.rs/tungstenite/) messages.
+tungstenite = ["dep:tungstenite", "dep:serde_json"]
+
+[dependencies]
+chrono = { workspace = true }
+if_chain = { workspace = true }
+ipnetwork = { workspace = true, features = ["serde"] }
+iso8601 = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tungstenite = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tungstenite = { workspace = true, features = ["native-tls"] }

@@ -29,9 +29,11 @@ jobs:
         with:
           tool: cargo-hack
       - name: Check
-        run: cargo hack check --each-feature
+        run: cargo hack check --each-feature --workspace
       - name: Test
-        run: cargo test
+        run: cargo test --workspace
+      - name: Docs
+        run: cargo doc --no-deps --workspace
 
   pre-commit:
     name: Run pre-commit hooks
