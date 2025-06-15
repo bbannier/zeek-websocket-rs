@@ -31,8 +31,7 @@
 //!     }
 //!
 //!     // Receive the next message and handle it.
-//!     let message = socket.read().unwrap();
-//!     if let Ok(msg) = message.try_into() {
+//!     if let Ok(msg) = socket.read().unwrap().try_into() {
 //!         conn.handle_input(msg);
 //!     }
 //!
