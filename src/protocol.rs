@@ -1,13 +1,13 @@
 //! # Sans I/O-style protocol wrapper for the Zeek API
 //!
-//! Instead of providing a full-fledged client [`Connection`] encapsulates the Zeek WebSocket
+//! Instead of providing a full-fledged client [`Binding`] encapsulates the Zeek WebSocket
 //! protocol [sans I/O style](https://sans-io.readthedocs.io/). It provides the following methods:
 //!
-//! - [`Connection::handle_input`] injects data received over a network connection into the
-//!   `Connection` object
-//! - [`Connection::enqueue`] to enqueue a message for Zeek
-//! - [`Connection::incoming`] gets the next message received from Zeek
-//! - [`Connection::outgoing`] gets the next data payload for sending to Zeek
+//! - [`Binding::handle_input`] injects data received over a network connection into the
+//!   `Binding` object
+//! - [`Binding::enqueue`] to enqueue a message for Zeek
+//! - [`Binding::incoming`] gets the next message received from Zeek
+//! - [`Binding::outgoing`] gets the next data payload for sending to Zeek
 //!
 //! A full client implementation will typically implement some form of event loop.
 //!
@@ -21,7 +21,7 @@
 //!
 //! // Create a connection.
 //! let topic = "/ping";
-//! let mut conn = Connection::new(Subscriptions::from(vec![topic]));
+//! let mut conn = Binding::new(Subscriptions::from(vec![topic]));
 //!
 //! // The event loop.
 //! loop {
@@ -62,7 +62,7 @@ use crate::types::{Message, Subscriptions};
 /// Protocol wrapper for a Zeek WebSocket connection.
 ///
 /// See the [module documentation](crate::protocol) for an introduction
-pub struct Connection {
+pub struct Binding {
     state: State,
     subscriptions: Subscriptions,
 
@@ -75,8 +75,8 @@ enum State {
     Subscribed,
 }
 
-impl Connection {
-    /// Create a new `Connection` with the given [`Subscriptions`].
+impl Binding {
+    /// Create a new `Binding` with the given [`Subscriptions`].
     #[must_use]
     pub fn new(subscriptions: Subscriptions) -> Self {
         Self {
@@ -122,8 +122,8 @@ impl Connection {
 
     /// Enqueue a message for sending.
     ///
-    /// If the `Connection` is not already subscribed to the topic
-    /// of `message` the `Connection` will be resubscribed.
+    /// If the `Binding` is not already subscribed to the topic
+    /// of `message` the `Binding` will be resubscribed.
     pub fn enqueue(&mut self, message: Message) {
         if let Message::DataMessage { topic, .. } = &message {
             let is_subscribed = &self
@@ -141,13 +141,13 @@ impl Connection {
         self.outbox.enqueue(message);
     }
 
-    /// Split the `Connection` into an [`Inbox`] and [`Outbox`].
+    /// Split the `Binding` into an [`Inbox`] and [`Outbox`].
     ///
     /// <div class="warning">
-    /// Clients can only publish to topics they are subscribed to. While <code>Connection</code>
+    /// Clients can only publish to topics they are subscribed to. While <code>Binding</code>
     /// gracefully resubscribes if it sees a event publish on topic it is not subscribed to, this
     /// is not provided by <code>Outbox</code>, so it is suggested to first subscribe to all topics
-    /// we want to publish on before splitting the <code>Connection</code>.
+    /// we want to publish on before splitting the <code>Binding</code>.
     /// </div>
     #[must_use]
     pub fn split(self) -> (Inbox, Outbox) {
@@ -155,7 +155,7 @@ impl Connection {
     }
 }
 
-/// Receiving side of a [`Connection`].
+/// Receiving side of a [`Binding`].
 pub struct Inbox(VecDeque<Message>);
 
 impl Inbox {
@@ -171,7 +171,7 @@ impl Inbox {
     }
 }
 
-/// Sending side of [`Connection`].
+/// Sending side of [`Binding`].
 pub struct Outbox(VecDeque<tungstenite::Message>);
 
 impl Outbox {
@@ -200,7 +200,7 @@ pub enum ProtocolError {
 #[cfg(test)]
 mod test {
     use crate::{
-        protocol::{Connection, ProtocolError},
+        protocol::{Binding, ProtocolError},
         types::{Data, Event, Message, Subscriptions, Value},
     };
     use futures_util::{SinkExt, TryStreamExt};
@@ -250,7 +250,7 @@ mod test {
             .await
             .unwrap();
 
-        let mut conn = Connection::new(Subscriptions::from(vec![topic]));
+        let mut conn = Binding::new(Subscriptions::from(vec![topic]));
 
         // Send the subscription.
         subscribe(&conn.outgoing().unwrap(), &mut transport).await;
@@ -296,7 +296,7 @@ mod test {
     #[tokio::test]
     async fn send() {
         let (mut transport, ..) = mock().await.unwrap();
-        let mut conn = Connection::new(Subscriptions::from(vec!["foo"]));
+        let mut conn = Binding::new(Subscriptions::from(vec!["foo"]));
 
         // Send the subscription.
         subscribe(&conn.outgoing().unwrap(), &mut transport).await;
@@ -317,7 +317,7 @@ mod test {
     #[tokio::test]
     async fn split() {
         let (mut transport, ..) = mock().await.unwrap();
-        let (mut inbox, mut outbox) = Connection::new(Subscriptions::from(vec!["foo"])).split();
+        let (mut inbox, mut outbox) = Binding::new(Subscriptions::from(vec!["foo"])).split();
 
         // Send the subscription.
         transport
@@ -340,7 +340,7 @@ mod test {
 
     #[tokio::test]
     async fn resubscribe() {
-        let mut conn = Connection::new(Subscriptions::from(vec!["foo"]));
+        let mut conn = Binding::new(Subscriptions::from(vec!["foo"]));
 
         // The initial message is the subscription to `["foo"]`.
         let message = tungstenite::Message::binary(conn.outgoing().unwrap());
@@ -366,7 +366,7 @@ mod test {
     async fn duplicate_ack() {
         let (mut transport, rx, _) = mock().await.unwrap();
 
-        let mut conn = Connection::new(Subscriptions::from(vec!["foo"]));
+        let mut conn = Binding::new(Subscriptions::from(vec!["foo"]));
 
         // The initial message we received is the ACK for subscription. Reinject it so we receive
         // multiple ACKs.
