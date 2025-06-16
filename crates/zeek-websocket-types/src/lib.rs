@@ -643,16 +643,24 @@ impl TryFrom<tungstenite::Message> for Subscriptions {
 mod test {
     #![allow(clippy::unwrap_used)]
 
-    use std::{i64, net::IpAddr, str::FromStr};
+    use std::{
+        collections::{HashMap, HashSet},
+        i64,
+        net::IpAddr,
+        str::FromStr,
+    };
 
     use crate::{
-        ConversionError, Data, Event, Message, ParseError, Port, Protocol, Subscriptions,
-        TableEntry, Value,
+        ConversionError, Data, DeserializationError, Event, Message, ParseError, Port, Protocol,
+        Subscriptions, TableEntry, Value,
     };
     use chrono::TimeDelta;
     use ipnetwork::IpNetwork;
     use iso8601::DateTime;
     use serde_json::json;
+
+    #[cfg(feature = "tungstenite")]
+    use tungstenite::Bytes;
 
     #[test]
     fn from_json() -> Result<(), serde_json::Error> {
@@ -721,6 +729,11 @@ mod test {
         let event2: Message = msg.try_into().unwrap();
 
         assert_eq!(event, event2);
+
+        assert_eq!(
+            Message::try_from(tungstenite::Message::Ping(Bytes::new())),
+            Err(DeserializationError::UnexpectedMessageType)
+        );
     }
 
     #[cfg(feature = "tungstenite")]
@@ -853,6 +866,10 @@ mod test {
             }))
             .unwrap()
         );
+
+        let data = Value::Count(42);
+        let json = serde_json::to_string(&Data::Other(data.clone())).unwrap();
+        assert_eq!(data, serde_json::from_str(&json).unwrap());
     }
 
     #[test]
@@ -890,7 +907,8 @@ mod test {
         assert_eq!(not_string, Err(ConversionError::MismatchedTypes));
 
         let outside_range: Result<i8, _> = Value::from(i64::MAX).try_into();
-        assert!(matches!(outside_range, Err(ConversionError::Domain(_))));
+        let err = i8::try_from(i64::MAX).err().unwrap();
+        assert_eq!(outside_range, Err(ConversionError::Domain(Box::new(err))));
     }
 
     #[test]
@@ -930,6 +948,15 @@ mod test {
     }
 
     #[test]
+    fn set() {
+        let table: HashSet<_, _> = [1, 2, 3].iter().copied().collect();
+        let Value::Set(xs) = Value::from(table) else {
+            panic!()
+        };
+        assert_eq!(xs.len(), 3);
+    }
+
+    #[test]
     fn table() {
         assert_eq!(
             serde_json::from_value::<Value>(json!({"@data-type":"table", "data": []})).unwrap(),
@@ -956,6 +983,12 @@ mod test {
         let t = TableEntry::new("one".into(), 1u8.into());
         assert_eq!(t.key().clone(), Value::String("one".into()));
         assert_eq!(t.value().clone(), Value::Count(1));
+
+        let table: HashMap<_, _> = [(1, 11), (2, 22), (3, 33)].iter().copied().collect();
+        let Value::Table(xs) = Value::from(table) else {
+            panic!()
+        };
+        assert_eq!(xs.len(), 3);
     }
 
     #[test]
