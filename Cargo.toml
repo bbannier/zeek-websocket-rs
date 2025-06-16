@@ -52,10 +52,10 @@ serde = "1.0.219"
 serde_json = "1.0.140"
 syn = { version = "2.0.103", features = ["derive", "parsing", "proc-macro", "printing"], default-features = false }
 thiserror = "2.0.12"
-tokio = "1.45.0"
-tokio-tungstenite = "0.26.2"
+tokio = "1.45.1"
+tokio-tungstenite = "0.27.0"
 trybuild = "1.0.105"
-tungstenite = "0.26.2"
+tungstenite = "0.27.0"
 zeek-websocket-derive = { path = "crates/zeek-websocket-derive" }
 zeek-websocket-types = { path = "crates/zeek-websocket-types" }
 
