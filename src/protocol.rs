@@ -262,103 +262,52 @@ mod test {
         protocol::{Binding, ProtocolError},
         types::{Data, Event, Message, Subscriptions, Value},
     };
-    use futures_util::{SinkExt, TryStreamExt};
-    use tokio::{net::TcpStream, sync::mpsc::Sender};
-    use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
-    use ws_mock::ws_mock_server::{WsMock, WsMockServer};
 
-    type Transport = WebSocketStream<MaybeTlsStream<TcpStream>>;
-
-    async fn mock() -> anyhow::Result<(Transport, Sender<tungstenite::Message>, WsMockServer)> {
-        let server = WsMockServer::start().await;
-        let (rx, tx) = tokio::sync::mpsc::channel::<tungstenite::Message>(1024);
-
-        WsMock::new().forward_from_channel(tx).mount(&server).await;
-        rx.send(
-            Message::Ack {
-                endpoint: "mock".into(),
-                version: "0.1".into(),
-            }
-            .into(),
-        )
-        .await
-        .unwrap();
-
-        let (transport, _) = connect_async(server.uri().await).await.unwrap();
-
-        Ok((transport, rx, server))
+    fn ack() -> Message {
+        Message::Ack {
+            endpoint: "mock".into(),
+            version: "0.1".into(),
+        }
     }
 
-    async fn subscribe(data: &[u8], transport: &mut Transport) {
-        let message = tungstenite::Message::from(data);
-
-        // Just validate that we indeed have a subscription.
-        assert!(Subscriptions::try_from(message.clone()).is_ok());
-
-        transport.send(message).await.unwrap()
-    }
-
-    #[tokio::test]
-    async fn recv() {
-        let (mut transport, rx, _) = mock().await.unwrap();
-
+    #[test]
+    fn recv() {
         let topic = "foo";
 
-        // Simply respond with a single event.
-        rx.send(Message::new_data(topic, Event::new("ping", Vec::<Value>::new())).into())
-            .await
-            .unwrap();
-
-        let mut conn = Binding::new(Subscriptions::from(&[topic]));
-
-        // Send the subscription.
-        subscribe(&conn.outgoing().unwrap(), &mut transport).await;
+        let mut conn = Binding::new(&[topic]);
 
         // Nothing received yet,
         assert_eq!(conn.incoming(), None);
 
-        conn.handle_input(
-            transport
-                .try_next()
-                .await
-                .unwrap()
-                .unwrap()
-                .try_into()
-                .unwrap(),
-        )
-        .unwrap();
+        // Handle subscription.
+        Subscriptions::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
+        conn.handle_input(ack().into()).unwrap();
+
         assert!(matches!(conn.incoming(), Some(Message::Ack { .. })));
 
         // No new input received.
         assert_eq!(conn.incoming(), None);
 
-        // Receive more input.
-        conn.handle_input(
-            transport
-                .try_next()
-                .await
-                .unwrap()
-                .unwrap()
-                .try_into()
-                .unwrap(),
-        )
-        .unwrap();
+        // Receive a single event.
+        conn.handle_input(Message::new_data(topic, Event::new("ping", Vec::<Value>::new())).into())
+            .unwrap();
+
         assert!(matches!(
             conn.incoming(),
             Some(Message::DataMessage {
                 data: Data::Event(..),
                 ..
             })
-        ),);
+        ));
     }
 
-    #[tokio::test]
-    async fn send() {
-        let (mut transport, ..) = mock().await.unwrap();
+    #[test]
+    fn send() {
         let mut conn = Binding::new(Subscriptions::from(&["foo"]));
 
-        // Send the subscription.
-        subscribe(&conn.outgoing().unwrap(), &mut transport).await;
+        // Handle subscription.
+        Subscriptions::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
+        conn.handle_input(ack().into()).unwrap();
 
         // Send an event.
         conn.enqueue(Message::new_data(
@@ -367,33 +316,26 @@ mod test {
         ))
         .unwrap();
 
-        let msg = conn.outgoing().unwrap();
-        transport
-            .send(tungstenite::Message::binary(msg))
-            .await
-            .unwrap();
+        // Event payload should be in outbox.
+        let msg =
+            Message::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
+        dbg!(&msg);
+        assert!(matches!(
+            msg,
+            Message::DataMessage {
+                data: Data::Event(..),
+                ..
+            }
+        ));
     }
 
-    #[tokio::test]
-    async fn split() {
-        let (mut transport, ..) = mock().await.unwrap();
+    #[test]
+    fn split() {
         let (mut inbox, mut outbox) = Binding::new(Subscriptions::from(&["foo"])).split();
 
-        // Send the subscription.
-        transport
-            .send(tungstenite::Message::binary(outbox.next_data().unwrap()))
-            .await
-            .unwrap();
-
-        inbox.handle(
-            transport
-                .try_next()
-                .await
-                .unwrap()
-                .unwrap()
-                .try_into()
-                .unwrap(),
-        );
+        // Handle subscription.
+        Subscriptions::try_from(tungstenite::Message::binary(outbox.next_data().unwrap())).unwrap();
+        inbox.handle(ack().into());
 
         assert!(matches!(inbox.next_message(), Some(Message::Ack { .. })));
     }
@@ -420,25 +362,20 @@ mod test {
         );
     }
 
-    #[tokio::test]
-    async fn duplicate_ack() {
-        let (mut transport, rx, _) = mock().await.unwrap();
+    #[test]
+    fn duplicate_ack() {
+        let mut conn = Binding::new(&["foo"]);
 
-        let mut conn = Binding::new(Subscriptions::from(&["foo"]));
+        // Handle subscription.
+        Subscriptions::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
+        conn.handle_input(ack().into()).unwrap();
 
-        // The initial message we received is the ACK for subscription. Reinject it so we receive
-        // multiple ACKs.
-        let subscription = tungstenite::Message::binary(conn.outgoing().unwrap());
-        transport.send(subscription).await.unwrap();
+        // The initial message we received is the ACK for subscription.
+        assert!(matches!(conn.incoming(), Some(Message::Ack { .. })));
 
-        let ack = transport.try_next().await.unwrap().unwrap();
-        assert!(matches!(ack.clone().try_into(), Ok(Message::Ack { .. })));
-        conn.handle_input(ack.clone().try_into().unwrap()).unwrap();
-        rx.send(ack).await.unwrap();
-
-        let ack = transport.try_next().await.unwrap().unwrap();
+        // Detect if we see another, unexpected ACK.
         assert_eq!(
-            conn.handle_input(ack.clone().try_into().unwrap()),
+            conn.handle_input(ack().into()),
             Err(ProtocolError::AlreadySubscribed)
         );
     }
@@ -448,10 +385,7 @@ mod test {
         let mut conn = Binding::new(Subscriptions(Vec::new()));
 
         // Put an ACK and an event into the inbox.
-        let _ = conn.handle_input(Message::Ack {
-            endpoint: "".to_string(),
-            version: "".to_string(),
-        });
+        let _ = conn.handle_input(ack());
         let _ = conn.handle_input(Message::new_data(
             "topic",
             Event::new("ping", Vec::<Value>::new()),
