@@ -1,0 +1,22 @@
+error[E0271]: type mismatch resolving `<&u8 as TryFrom<Value>>::Error == ConversionError`
+ --> tests/zeek_event-non-value-fail.rs:3:1
+  |
+3 | #[zeek_event(handle_foo)]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ expected `ConversionError`, found `Infallible`
+  |
+  = note: this error originates in the attribute macro `zeek_event` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `&u8: From<Value>` is not satisfied
+ --> tests/zeek_event-non-value-fail.rs:3:1
+  |
+3 | #[zeek_event(handle_foo)]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `From<Value>` is not implemented for `&u8`
+  |
+  = help: the following other types implement trait `From<T>`:
+            `u8` implements `From<Char>`
+            `u8` implements `From<bool>`
+            `u8` implements `From<tungstenite::protocol::frame::coding::OpCode>`
+  = note: required for `Value` to implement `Into<&u8>`
+  = note: required for `&u8` to implement `TryFrom<Value>`
+  = note: required for `Value` to implement `TryInto<&u8>`
+  = note: this error originates in the attribute macro `zeek_event` (in Nightly builds, run with -Z macro-backtrace for more info)

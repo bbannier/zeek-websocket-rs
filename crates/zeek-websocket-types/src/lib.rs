@@ -153,6 +153,9 @@ pub enum ConversionError {
 
     #[error("conversion to target type failed")]
     Domain(Box<dyn Error>),
+
+    #[error("signature mismatch, expected {0}, but got {1}")]
+    MismatchedSignature(usize, usize),
 }
 
 impl PartialEq for ConversionError {

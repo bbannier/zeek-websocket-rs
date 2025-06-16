@@ -68,4 +68,39 @@ pub use protocol::Binding;
 
 #[cfg(feature = "derive")]
 #[doc(inline)]
-pub use zeek_websocket_derive::ZeekType;
+pub use zeek_websocket_derive::{ZeekType, zeek_event};
+
+#[cfg(test)]
+mod test {
+
+    use zeek_websocket_types::{ConversionError, Value};
+
+    macro_rules! assert_ok {
+        ($e:expr) => {
+            match $e {
+                Ok(_) => {}
+                Err(e) => panic!("{e}"),
+            }
+        };
+    }
+
+    #[zeek_websocket_derive::zeek_event(handle_event)]
+    fn event(_a: i64, _b: i64) {}
+
+    #[test]
+    fn zeek_event() {
+        assert!(matches!(
+            handle_event(Value::from(Vec::<Value>::new())),
+            Err(ConversionError::MismatchedSignature(_, _))
+        ));
+        assert!(matches!(
+            handle_event(Value::from(vec![1])),
+            Err(ConversionError::MismatchedSignature(_, _))
+        ));
+        assert_ok!(handle_event(Value::from(vec![1, 2])));
+        assert!(matches!(
+            handle_event(Value::from(vec![1, 2, 3])),
+            Err(ConversionError::MismatchedSignature(_, _))
+        ));
+    }
+}

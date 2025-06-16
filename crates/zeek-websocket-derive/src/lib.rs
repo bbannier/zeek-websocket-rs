@@ -1,7 +1,10 @@
 use proc_macro_error2::{abort, proc_macro_error};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Data, DeriveInput, Field, Fields, Ident, parse_macro_input, spanned::Spanned};
+use syn::{
+    Data, DeriveInput, Field, Fields, Ident, ItemFn, parse::Parse, parse_macro_input,
+    spanned::Spanned,
+};
 
 /// Derive macro to convert a type from and to a `zeek_websocket_types::Value`.
 ///
@@ -103,5 +106,83 @@ fn impl_from_value(name: &Ident, fields: &[Field]) -> TokenStream {
                 Ok(#name { #(#names),* })
             }
         }
+    }
+}
+
+/// Attribute to automatically generate Zeek event handlers.
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn zeek_event(
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let item = parse_macro_input!(item as ItemFn);
+
+    let args = match syn::parse::<Args>(attr.clone()) {
+        Ok(xs) => xs,
+        Err(e) => abort!(e.span(), "unexpected argument"),
+    };
+
+    let handler_name = args.name;
+
+    let sig = &item.sig;
+
+    let name = &sig.ident;
+    if name == &handler_name {
+        abort!(
+            handler_name.span(),
+            "handler name cannot be identical to function name"
+        );
+    }
+
+    let num_expected_args = sig.inputs.len();
+
+    let converted_args = TokenStream::from_iter((0..num_expected_args).map(|_| {
+        quote! {
+            #[allow(clippy::unwrap_used)]
+            ::std::convert::TryInto::try_into(args.next().unwrap())?,
+        }
+    }));
+
+    let doc = format!("Automatically generated event handler wrapper for '{name}'.");
+
+    quote! {
+        #item
+
+        #[doc= #doc]
+        fn #handler_name(args: ::zeek_websocket_types::Value) -> ::std::result::Result<(), ::zeek_websocket_types::ConversionError> {
+            use ::zeek_websocket_types::{ConversionError, Value};
+
+            let Value::Vector(args) = args else {
+                return Err(ConversionError::MismatchedTypes);
+            };
+
+            // Check that number of entries matches up with argument count.
+            let num_provided_args = args.len();
+            if num_provided_args != #num_expected_args {
+                return Err(ConversionError::MismatchedSignature(
+                        #num_expected_args,
+                        num_provided_args,
+                ));
+            }
+
+            let mut args = args.into_iter();
+
+            Ok(#name(#converted_args))
+        }
+    }
+    .into()
+}
+
+#[derive(Debug)]
+struct Args {
+    name: Ident,
+}
+
+impl Parse for Args {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(Self {
+            name: input.parse()?,
+        })
     }
 }
