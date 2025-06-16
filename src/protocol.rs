@@ -20,8 +20,7 @@
 //! let (mut socket, _) = tungstenite::connect("ws://127.0.0.1:8080/v1/messages/json").unwrap();
 //!
 //! // Create a connection.
-//! let topic = "/ping";
-//! let mut conn = Binding::new(Subscriptions::from(&[topic]));
+//! let mut conn = Binding::new(&["/ping"]);
 //!
 //! // The event loop.
 //! loop {
@@ -36,7 +35,7 @@
 //!     }
 //!
 //!     // If we received a `ping` event, respond with a `pong`.
-//!     if let Some((_topic, event)) = conn.next_event() {
+//!     if let Some((topic, event)) = conn.next_event() {
 //!         if event.name == "ping" {
 //!             conn.enqueue_event(topic, Event::new("pong", event.args.clone()));
 //!         }
@@ -287,6 +286,7 @@ mod test {
 
         // No new input received.
         assert_eq!(conn.incoming(), None);
+        assert_eq!(conn.next_event(), None);
 
         // Receive a single event.
         conn.handle_input(Message::new_data(topic, Event::new("ping", Vec::<Value>::new())).into())
@@ -303,18 +303,15 @@ mod test {
 
     #[test]
     fn send() {
-        let mut conn = Binding::new(Subscriptions::from(&["foo"]));
+        let mut conn = Binding::new(&["foo"]);
 
         // Handle subscription.
         Subscriptions::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
         conn.handle_input(ack().into()).unwrap();
 
         // Send an event.
-        conn.enqueue(Message::new_data(
-            "foo",
-            Event::new("ping", Vec::<Value>::new()),
-        ))
-        .unwrap();
+        conn.enqueue_event("foo", Event::new("ping", Vec::<Value>::new()))
+            .unwrap();
 
         // Event payload should be in outbox.
         let msg =
@@ -331,7 +328,7 @@ mod test {
 
     #[test]
     fn split() {
-        let (mut inbox, mut outbox) = Binding::new(Subscriptions::from(&["foo"])).split();
+        let (mut inbox, mut outbox) = Binding::new(&["foo"]).split();
 
         // Handle subscription.
         Subscriptions::try_from(tungstenite::Message::binary(outbox.next_data().unwrap())).unwrap();
@@ -342,7 +339,7 @@ mod test {
 
     #[test]
     fn send_on_non_subscribed() {
-        let mut conn = Binding::new(Subscriptions::from(&["foo"]));
+        let mut conn = Binding::new(&["foo"]);
 
         // The initial message is the subscription to `["foo"]`.
         let message = tungstenite::Message::binary(conn.outgoing().unwrap());
@@ -351,9 +348,8 @@ mod test {
 
         // Sent a message on `"bar"` to which we are not subscribed.
         let event = Event::new("ping", vec!["ping on 'bar'"]);
-        let message = Message::new_data("bar", event.clone());
         assert_eq!(
-            conn.enqueue(message),
+            conn.enqueue_event("bar", event.clone()),
             Err(ProtocolError::SendOnNonSubscribed(
                 "bar".to_string(),
                 Subscriptions::from(&["foo"]),
@@ -402,7 +398,7 @@ mod test {
 
     #[test]
     fn enqueue_event() {
-        let mut conn = Binding::new(Subscriptions::from(&["foo"]));
+        let mut conn = Binding::new(&["foo"]);
         // Consume the subscription.
         conn.outgoing().unwrap();
 

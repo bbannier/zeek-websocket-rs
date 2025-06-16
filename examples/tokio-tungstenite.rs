@@ -9,7 +9,7 @@ use std::{
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
 use tokio_tungstenite::connect_async;
 use tungstenite::client::IntoClientRequest;
-use zeek_websocket::{Event, Subscriptions, protocol::Binding};
+use zeek_websocket::{Event, protocol::Binding};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
 
     const TOPIC: &str = "/ping";
 
-    let (mut inbox, mut outbox) = Binding::new(Subscriptions::from(&[TOPIC])).split();
+    let (mut inbox, mut outbox) = Binding::new(&[TOPIC]).split();
 
     let num_sent = Arc::new(AtomicU64::new(0));
     let num_received = Arc::new(AtomicU64::new(0));
