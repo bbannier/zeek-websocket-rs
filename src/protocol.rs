@@ -131,40 +131,52 @@ impl Binding {
 
     /// Enqueue a message for sending.
     ///
-    /// If the `Binding` is not already subscribed to the topic
-    /// of `message` the `Binding` will be resubscribed.
-    pub fn enqueue(&mut self, message: Message) {
-        if let Message::DataMessage { topic, .. } = &message {
-            let is_subscribed = &self
-                .subscriptions
-                .0
-                .iter()
-                .any(|s| s.as_str() == topic.as_str());
+    /// # Errors
+    ///
+    /// Will return [`ProtocolError::SendOnNonSubscribed`] if the binding is not subscribed to the
+    /// topic of the message.
+    pub fn enqueue(&mut self, message: Message) -> Result<(), ProtocolError> {
+        match message {
+            Message::DataMessage { topic, data } => {
+                let is_subscribed = self
+                    .subscriptions
+                    .0
+                    .iter()
+                    .any(|s| s.as_str() == topic.as_str());
 
-            if !is_subscribed {
-                self.subscriptions.0.push(topic.into());
-                self.outbox.enqueue(self.subscriptions.clone());
+                if is_subscribed {
+                    self.outbox.enqueue(Message::DataMessage { topic, data });
+                } else {
+                    return Err(ProtocolError::SendOnNonSubscribed(
+                        topic,
+                        self.subscriptions.clone(),
+                        data,
+                    ))?;
+                }
             }
+            _ => self.outbox.enqueue(message),
         }
 
-        self.outbox.enqueue(message);
+        Ok(())
     }
 
     /// Enqueue an event for sending.
     ///
-    /// See [`Binding::enqueue`] for the handling of the topic.
-    pub fn enqueue_event<S>(&mut self, topic: S, event: Event)
+    /// # Errors
+    ///
+    /// See [`Binding::enqueue`] for possible errors.
+    pub fn enqueue_event<S>(&mut self, topic: S, event: Event) -> Result<(), ProtocolError>
     where
         S: Into<String>,
     {
-        self.enqueue(Message::new_data(topic.into(), event));
+        self.enqueue(Message::new_data(topic.into(), event))
     }
 
     /// Split the `Binding` into an [`Inbox`] and [`Outbox`].
     ///
     /// <div class="warning">
     /// Clients can only publish to topics they are subscribed to. While <code>Binding</code>
-    /// gracefully resubscribes if it sees a event publish on topic it is not subscribed to, this
+    /// detects if it sees a publish on topic it is not subscribed to, this
     /// is not provided by <code>Outbox</code>, so it is suggested to first subscribe to all topics
     /// we want to publish on before splitting the <code>Binding</code>.
     /// </div>
@@ -239,6 +251,9 @@ pub enum ProtocolError {
     /// received an ACK while already subscribed
     #[error("received an ACK while already subscribed")]
     AlreadySubscribed,
+
+    #[error("attempted to send on topic '{0}' but only subscribed to '{1}'")]
+    SendOnNonSubscribed(String, Subscriptions, Data),
 }
 
 #[cfg(test)]
@@ -349,7 +364,8 @@ mod test {
         conn.enqueue(Message::new_data(
             "foo",
             Event::new("ping", Vec::<Value>::new()),
-        ));
+        ))
+        .unwrap();
 
         let msg = conn.outgoing().unwrap();
         transport
@@ -382,8 +398,8 @@ mod test {
         assert!(matches!(inbox.next_message(), Some(Message::Ack { .. })));
     }
 
-    #[tokio::test]
-    async fn resubscribe() {
+    #[test]
+    fn send_on_non_subscribed() {
         let mut conn = Binding::new(Subscriptions::from(&["foo"]));
 
         // The initial message is the subscription to `["foo"]`.
@@ -392,18 +408,16 @@ mod test {
         assert_eq!(subscription, Subscriptions::from(&["foo"]));
 
         // Sent a message on `"bar"` to which we are not subscribed.
-        let event = Message::new_data("bar", Event::new("ping", vec!["ping on 'bar'"]));
-        conn.enqueue(event.clone());
-
-        // We expect to see a resubscription which adds `"bar"`.
-        let message = tungstenite::Message::binary(conn.outgoing().unwrap());
-        let ack = Subscriptions::try_from(message).unwrap();
-        assert_eq!(ack, Subscriptions::from(&["foo", "bar"]));
-
-        // The original message follows after.
-        let message = tungstenite::Message::binary(conn.outgoing().unwrap());
-        let message = Message::try_from(message);
-        assert_eq!(message, Ok(event));
+        let event = Event::new("ping", vec!["ping on 'bar'"]);
+        let message = Message::new_data("bar", event.clone());
+        assert_eq!(
+            conn.enqueue(message),
+            Err(ProtocolError::SendOnNonSubscribed(
+                "bar".to_string(),
+                Subscriptions::from(&["foo"]),
+                Data::Event(event),
+            ))
+        );
     }
 
     #[tokio::test]
@@ -458,7 +472,8 @@ mod test {
         // Consume the subscription.
         conn.outgoing().unwrap();
 
-        conn.enqueue_event("foo", Event::new("ping", Vec::<Value>::new()));
+        conn.enqueue_event("foo", Event::new("ping", Vec::<Value>::new()))
+            .unwrap();
         let message =
             Message::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
         let Message::DataMessage {

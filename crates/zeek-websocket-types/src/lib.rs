@@ -609,6 +609,12 @@ where
     }
 }
 
+impl std::fmt::Display for Subscriptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("[{}]", self.0.join(", ")))
+    }
+}
+
 #[cfg(feature = "tungstenite")]
 impl From<Subscriptions> for tungstenite::Message {
     fn from(value: Subscriptions) -> Self {
