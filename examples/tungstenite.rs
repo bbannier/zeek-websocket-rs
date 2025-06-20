@@ -15,14 +15,14 @@ fn main() -> anyhow::Result<()> {
 
         // Receive the next message and handle it.
         if let Ok(msg) = socket.read()?.try_into() {
-            conn.handle_input(msg)?;
+            conn.handle_incoming(msg)?;
         }
 
         // Wait for the next event.
-        if let Some((topic, Event { name, args, .. })) = conn.next_event() {
+        if let Some((topic, Event { name, args, .. })) = conn.receive_event()? {
             // If we received a `ping` event, respond with a `pong`.
             if name == "ping" {
-                conn.enqueue_event(topic, Event::new("pong", args))?;
+                conn.publish_event(topic, Event::new("pong", args))?;
             }
         }
     }

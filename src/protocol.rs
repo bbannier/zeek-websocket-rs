@@ -3,10 +3,10 @@
 //! Instead of providing a full-fledged client [`Binding`] encapsulates the Zeek WebSocket
 //! protocol [sans I/O style](https://sans-io.readthedocs.io/). It provides the following methods:
 //!
-//! - [`Binding::handle_input`] injects data received over a network connection into the
+//! - [`Binding::handle_incoming`] injects data received over a network connection into the
 //!   `Binding` object
-//! - [`Binding::enqueue`] to enqueue a message for Zeek
-//! - [`Binding::incoming`] gets the next message received from Zeek
+//! - [`Binding::receive_event`] gets the next event received from Zeek
+//! - [`Binding::publish_event`] to publish an event to Zeek
 //! - [`Binding::outgoing`] gets the next data payload for sending to Zeek
 //!
 //! A full client implementation will typically implement some form of event loop.
@@ -16,6 +16,7 @@
 //! ```no_run
 //! use zeek_websocket::*;
 //!
+//! # fn main() -> anyhow::Result<()> {
 //! // Open an underlying WebSocket connection to a Zeek endpoint.
 //! let (mut socket, _) = tungstenite::connect("ws://127.0.0.1:8080/v1/messages/json").unwrap();
 //!
@@ -26,28 +27,29 @@
 //! loop {
 //!     // If we have any outgoing messages send at least one.
 //!     if let Some(data) = conn.outgoing() {
-//!         socket.send(tungstenite::Message::binary(data)).unwrap();
+//!         socket.send(tungstenite::Message::binary(data))?;
 //!     }
 //!
 //!     // Receive the next message and handle it.
-//!     if let Ok(msg) = socket.read().unwrap().try_into() {
-//!         conn.handle_input(msg);
+//!     if let Ok(msg) = socket.read()?.try_into() {
+//!         conn.handle_incoming(msg);
 //!     }
 //!
 //!     // If we received a `ping` event, respond with a `pong`.
-//!     if let Some((topic, event)) = conn.next_event() {
+//!     if let Some((topic, event)) = conn.receive_event()? {
 //!         if event.name == "ping" {
-//!             conn.enqueue_event(topic, Event::new("pong", event.args.clone()));
+//!             conn.publish_event(topic, Event::new("pong", event.args.clone()));
 //!         }
 //!     }
 //! }
+//! # }
 //! ```
 
 use std::collections::VecDeque;
 
 use thiserror::Error;
 use tungstenite::Bytes;
-use zeek_websocket_types::{Data, Event, Message};
+use zeek_websocket_types::{Data, Event, Message, Value};
 
 use crate::types::Subscriptions;
 
@@ -95,25 +97,28 @@ impl Binding {
     ///
     /// # Errors
     ///
-    /// Returns a [`ProtocolError::AlreadySubscribed`] if we saw an unexpected ACK.
-    pub fn handle_input(&mut self, message: Message) -> Result<(), ProtocolError> {
-        if let Message::Ack { .. } = &message {
-            match self.state {
+    /// - returns a [`ProtocolError::AlreadySubscribed`] if we saw an unexpected ACK.
+    /// - returns a [`ProtocolError::UnexpectedEventPayload`] if an unexpected event payload was seen
+    pub fn handle_incoming(&mut self, message: Message) -> Result<(), ProtocolError> {
+        match &message {
+            Message::Ack { .. } => match self.state {
                 State::Subscribing => {
                     self.state = State::Subscribed;
                 }
                 State::Subscribed => return Err(ProtocolError::AlreadySubscribed),
+            },
+            Message::DataMessage {
+                data: Data::Other(unexpected),
+                ..
+            } => {
+                return Err(ProtocolError::UnexpectedEventPayload(unexpected.clone()));
+            }
+            _ => {
+                self.inbox.handle(message);
             }
         }
 
-        self.inbox.handle(message);
         Ok(())
-    }
-
-    /// Get next incoming message.
-    #[must_use]
-    pub fn incoming(&mut self) -> Option<Message> {
-        self.inbox.next_message()
     }
 
     /// Get next data enqueued for sending.
@@ -123,18 +128,34 @@ impl Binding {
 
     /// Get the next incoming event.
     ///
-    /// In contrast to [`Binding::incoming`] this discards any non-`Event` messages which were received.
-    pub fn next_event(&mut self) -> Option<(String, Event)> {
-        self.inbox.next_event()
+    /// # Errors
+    ///
+    /// - returns a [`ProtocolError::ZeekError`] if an error was received from Zeek
+    ///   received
+    pub fn receive_event(&mut self) -> Result<Option<(String, Event)>, ProtocolError> {
+        if let Some(message) = self.inbox.next_message() {
+            match message {
+                Message::DataMessage { topic, data } => {
+                    let event = match data {
+                        Data::Event(event) => event,
+                        Data::Other(..) => unreachable!(), // Rejected in `handle_incoming`.
+                    };
+                    return Ok(Some((topic, event)));
+                }
+                Message::Error { code, context } => {
+                    return Err(ProtocolError::ZeekError { code, context });
+                }
+                Message::Ack { .. } => {
+                    unreachable!() // Never forwarded from `handle_incoming`.
+                }
+            }
+        }
+
+        Ok(None)
     }
 
     /// Enqueue a message for sending.
-    ///
-    /// # Errors
-    ///
-    /// Will return [`ProtocolError::SendOnNonSubscribed`] if the binding is not subscribed to the
-    /// topic of the message.
-    pub fn enqueue(&mut self, message: Message) -> Result<(), ProtocolError> {
+    fn enqueue(&mut self, message: Message) -> Result<(), ProtocolError> {
         match message {
             Message::DataMessage { topic, data } => {
                 let is_subscribed = self
@@ -163,8 +184,9 @@ impl Binding {
     ///
     /// # Errors
     ///
-    /// See [`Binding::enqueue`] for possible errors.
-    pub fn enqueue_event<S>(&mut self, topic: S, event: Event) -> Result<(), ProtocolError>
+    /// Will return [`ProtocolError::SendOnNonSubscribed`] if the binding is not subscribed to the
+    /// topic of the message.
+    pub fn publish_event<S>(&mut self, topic: S, event: Event) -> Result<(), ProtocolError>
     where
         S: Into<String>,
     {
@@ -174,10 +196,7 @@ impl Binding {
     /// Split the `Binding` into an [`Inbox`] and [`Outbox`].
     ///
     /// <div class="warning">
-    /// Clients can only publish to topics they are subscribed to. While <code>Binding</code>
-    /// detects if it sees a publish on topic it is not subscribed to, this
-    /// is not provided by <code>Outbox</code>, so it is suggested to first subscribe to all topics
-    /// we want to publish on before splitting the <code>Binding</code>.
+    /// The returned <code>Inbox</code> and <code>Outbox</code> do not enforce correct use of the protocol.
     /// </div>
     #[must_use]
     pub fn split(self) -> (Inbox, Outbox) {
@@ -253,6 +272,12 @@ pub enum ProtocolError {
 
     #[error("attempted to send on topic '{0}' but only subscribed to '{1}'")]
     SendOnNonSubscribed(String, Subscriptions, Data),
+
+    #[error("Zeek error {code}: {context}")]
+    ZeekError { code: String, context: String },
+
+    #[error("unexpected event payload received")]
+    UnexpectedEventPayload(Value),
 }
 
 #[cfg(test)]
@@ -276,24 +301,24 @@ mod test {
         let mut conn = Binding::new(&[topic]);
 
         // Nothing received yet,
-        assert_eq!(conn.incoming(), None);
+        assert_eq!(conn.inbox.next_message(), None);
 
         // Handle subscription.
         Subscriptions::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
-        conn.handle_input(ack().into()).unwrap();
-
-        assert!(matches!(conn.incoming(), Some(Message::Ack { .. })));
+        conn.handle_incoming(ack().into()).unwrap();
 
         // No new input received.
-        assert_eq!(conn.incoming(), None);
-        assert_eq!(conn.next_event(), None);
+        assert_eq!(conn.inbox.next_message(), None);
+        assert_eq!(conn.receive_event(), Ok(None));
 
         // Receive a single event.
-        conn.handle_input(Message::new_data(topic, Event::new("ping", Vec::<Value>::new())).into())
-            .unwrap();
+        conn.handle_incoming(
+            Message::new_data(topic, Event::new("ping", Vec::<Value>::new())).into(),
+        )
+        .unwrap();
 
         assert!(matches!(
-            conn.incoming(),
+            conn.inbox.next_message(),
             Some(Message::DataMessage {
                 data: Data::Event(..),
                 ..
@@ -307,10 +332,10 @@ mod test {
 
         // Handle subscription.
         Subscriptions::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
-        conn.handle_input(ack().into()).unwrap();
+        conn.handle_incoming(ack().into()).unwrap();
 
         // Send an event.
-        conn.enqueue_event("foo", Event::new("ping", Vec::<Value>::new()))
+        conn.publish_event("foo", Event::new("ping", Vec::<Value>::new()))
             .unwrap();
 
         // Event payload should be in outbox.
@@ -349,7 +374,7 @@ mod test {
         // Sent a message on `"bar"` to which we are not subscribed.
         let event = Event::new("ping", vec!["ping on 'bar'"]);
         assert_eq!(
-            conn.enqueue_event("bar", event.clone()),
+            conn.publish_event("bar", event.clone()),
             Err(ProtocolError::SendOnNonSubscribed(
                 "bar".to_string(),
                 Subscriptions::from(&["foo"]),
@@ -362,17 +387,26 @@ mod test {
     fn duplicate_ack() {
         let mut conn = Binding::new(&["foo"]);
 
-        // Handle subscription.
+        // Handle subscription. The call to `handle_incoming` consumes the ACK.
         Subscriptions::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
-        conn.handle_input(ack().into()).unwrap();
-
-        // The initial message we received is the ACK for subscription.
-        assert!(matches!(conn.incoming(), Some(Message::Ack { .. })));
+        conn.handle_incoming(ack().into()).unwrap();
 
         // Detect if we see another, unexpected ACK.
         assert_eq!(
-            conn.handle_input(ack().into()),
+            conn.handle_incoming(ack().into()),
             Err(ProtocolError::AlreadySubscribed)
+        );
+    }
+
+    #[test]
+    fn other_event_payload() {
+        let mut conn = Binding::new(&["foo"]);
+        conn.handle_incoming(ack()).unwrap();
+
+        let other = Message::new_data("foo", Value::Count(42));
+        assert_eq!(
+            conn.handle_incoming(other),
+            Err(ProtocolError::UnexpectedEventPayload(Value::Count(42)))
         );
     }
 
@@ -381,28 +415,48 @@ mod test {
         let mut conn = Binding::new(Subscriptions(Vec::new()));
 
         // Put an ACK and an event into the inbox.
-        let _ = conn.handle_input(ack());
-        let _ = conn.handle_input(Message::new_data(
+        let _ = conn.handle_incoming(ack());
+        let _ = conn.handle_incoming(Message::new_data(
             "topic",
             Event::new("ping", Vec::<Value>::new()),
         ));
 
-        // Event though we have an ACK in the inbox `next_event`
+        // Event though we have an ACK in the inbox `receive_event`
         // discards it and returns the event.
-        let (topic, event) = conn.next_event().unwrap();
+        let (topic, event) = conn.receive_event().unwrap().unwrap();
         assert_eq!(topic, "topic");
         assert_eq!(event.name, "ping");
 
-        assert_eq!(conn.incoming(), None);
+        assert_eq!(conn.inbox.next_message(), None);
     }
 
     #[test]
-    fn enqueue_event() {
+    fn error() {
+        let mut conn = Binding::new(&["foo"]);
+        conn.handle_incoming(ack()).unwrap();
+
+        conn.handle_incoming(Message::Error {
+            code: "code".to_string(),
+            context: "context".to_string(),
+        })
+        .unwrap();
+
+        assert_eq!(
+            conn.receive_event(),
+            Err(ProtocolError::ZeekError {
+                code: "code".to_string(),
+                context: "context".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn publish_event() {
         let mut conn = Binding::new(&["foo"]);
         // Consume the subscription.
         conn.outgoing().unwrap();
 
-        conn.enqueue_event("foo", Event::new("ping", Vec::<Value>::new()))
+        conn.publish_event("foo", Event::new("ping", Vec::<Value>::new()))
             .unwrap();
         let message =
             Message::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
