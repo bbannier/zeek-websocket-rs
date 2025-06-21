@@ -408,6 +408,7 @@ pub enum Message {
         /// Zeek-assigned kind of the error.
         code: String,
         /// Additional context.
+        #[serde(alias = "message")] // See https://github.com/zeek/zeek/issues/4594.
         context: String,
     },
 
