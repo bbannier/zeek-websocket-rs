@@ -131,7 +131,6 @@ impl Binding {
     /// # Errors
     ///
     /// - returns a [`ProtocolError::ZeekError`] if an error was received from Zeek
-    ///   received
     pub fn receive_event(&mut self) -> Result<Option<(String, Event)>, ProtocolError> {
         if let Some(message) = self.inbox.next_message() {
             match message {
