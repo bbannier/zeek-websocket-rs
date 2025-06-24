@@ -18,7 +18,7 @@
 //!
 //! # fn main() -> anyhow::Result<()> {
 //! // Open an underlying WebSocket connection to a Zeek endpoint.
-//! let (mut socket, _) = tungstenite::connect("ws://127.0.0.1:8080/v1/messages/json").unwrap();
+//! let (mut socket, _) = tungstenite::connect("ws://127.0.0.1:8080/v1/messages/json")?;
 //!
 //! // Create a connection.
 //! let mut conn = Binding::new(&["/ping"]);
