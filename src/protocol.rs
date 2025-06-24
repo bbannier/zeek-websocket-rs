@@ -38,7 +38,7 @@
 //!     // If we received a `ping` event, respond with a `pong`.
 //!     if let Some((topic, event)) = conn.receive_event()? {
 //!         if event.name == "ping" {
-//!             conn.publish_event(topic, Event::new("pong", event.args.clone()));
+//!             conn.publish_event(topic, Event::new("pong", event.args));
 //!         }
 //!     }
 //! }
