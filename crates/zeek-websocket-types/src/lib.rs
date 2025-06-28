@@ -1,4 +1,3 @@
-use if_chain::if_chain;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -496,25 +495,21 @@ const FORMAT_NR: u64 = 1;
 
 impl From<Value> for Data {
     fn from(value: Value) -> Self {
-        if_chain! {
-            if let Value::Vector(xs) = &value;
-            if let Some(Value::Count(EVENT_TYPE)) = xs.get(1); // Events have type `1`.
+        if let Value::Vector(xs) = &value
+          && let Some(Value::Count(EVENT_TYPE)) = xs.get(1) // Events have type `1`.
+          && let Some(Value::Vector(data)) = xs.get(2)
+          && let Some(Value::String(name)) = data.first().cloned()
+          && let Some(Value::Vector(args)) = data.get(1).cloned()
+        {
+            // Metadata might be present or not. Currently nodes seem to send it, but it is
+            // undocumented.
+            let metadata = match data.get(2) {
+                Some(Value::Vector(xs)) => xs.clone(),
+                Some(xs) => vec![xs.clone()],
+                None => vec![],
+            };
 
-            if let Some(Value::Vector(data)) = xs.get(2);
-            if let Some(Value::String(name)) = data.first().cloned();
-            if let Some(Value::Vector(args)) = data.get(1).cloned();
-
-            then {
-                // Metadata might be present or not. Currently nodes seem to send it, but it is
-                // undocumented.
-                let metadata = match data.get(2) {
-                    Some(Value::Vector(xs)) => xs.clone(),
-                    Some(xs) => vec![xs.clone()],
-                    None => vec![],
-                };
-
-                return Data::Event(Event::new(name, args).with_metadata(metadata));
-            }
+            return Data::Event(Event::new(name, args).with_metadata(metadata));
         };
 
         Data::Other(value)

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/bbannier/zeek-websocket-rs"
-rust-version = "1.85"
+rust-version = "1.88"
 
 [features]
 default = ["tungstenite", "derive"]
@@ -42,7 +42,6 @@ chrono = { version = "0.4.41", default-features = false }
 criterion = { version = "2.10.1", default-features = false, features = ["async_tokio", "html_reports", "plotters"], package = "codspeed-criterion-compat" }
 document-features = "0.2.11"
 futures-util = "0.3.31"
-if_chain = "1.0.2"
 ipnetwork = "0.21.1"
 iso8601 = "0.6.3"
 proc-macro-error2 = "2.0.1"

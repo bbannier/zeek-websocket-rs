@@ -3,6 +3,7 @@ name = "zeek-websocket-derive"
 version = "0.1.0"
 edition = "2024"
 autotests = false
+rust-version = "1.88"
 
 [dependencies]
 proc-macro-error2 = { workspace = true }
