@@ -21,13 +21,10 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: moonrepo/setup-rust@v1
         with:
-          key: pre-commit-cargo-${{ hashFiles('Cargo.lock') }}
-      - uses: taiki-e/install-action@v2.54.0
-        with:
-          tool: cargo-hack
+          channel: stable
+          bins: cargo-hack
       - name: Check
         run: cargo hack check --each-feature --workspace
       - name: Test
@@ -43,12 +40,10 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: moonrepo/setup-rust@v1
         with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: pre-commit-cargo-${{ hashFiles('Cargo.lock') }}
+          channel: stable
+          bins: cargo-hack
       - uses: actions/setup-python@v5
       - uses: pre-commit/action@v3.0.1
 
