@@ -7,19 +7,26 @@ repository = "https://github.com/bbannier/zeek-websocket-rs"
 rust-version = "1.88"
 
 [features]
-default = ["tungstenite", "derive"]
+default = ["tungstenite", "derive", "tokio-client"]
 
-## Enables conversions to and from [`tungstenite`](https://docs.rs/tungstenite/) messages.
-tungstenite = ["dep:tungstenite", "dep:serde_json"]
+## Enables tokio client.
+tokio-client = ["dep:tokio-tungstenite", "dep:futures-util", "dep:typed-builder", "dep:tokio", "tungstenite"]
 
 ## Enables derive macros for converting to and from [`zeek_websocket_types::Value`]
 derive = ["dep:zeek-websocket-derive"]
 
+## Enables conversions to and from [`tungstenite`](https://docs.rs/tungstenite/) messages.
+tungstenite = ["dep:tungstenite", "dep:serde_json"]
+
 [dependencies]
 document-features = { workspace = true }
+futures-util = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"], optional = true }
+tokio-tungstenite = { workspace = true, optional = true }
 tungstenite = { workspace = true, optional = true }
+typed-builder = { workspace = true, optional = true }
 zeek-websocket-derive = { workspace = true, optional = true }
 zeek-websocket-types = { workspace = true }
 
@@ -29,7 +36,7 @@ criterion = { workspace = true }
 futures-util = { workspace = true }
 ipnetwork = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tokio-tungstenite = { workspace = true }
 tungstenite = { workspace = true, features = ["native-tls"] }
 
@@ -55,6 +62,7 @@ tokio = "1.45.1"
 tokio-tungstenite = "0.27.0"
 trybuild = "1.0.105"
 tungstenite = "0.27.0"
+typed-builder = "0.21.0"
 zeek-websocket-derive = { path = "crates/zeek-websocket-derive" }
 zeek-websocket-types = { path = "crates/zeek-websocket-types" }
 

@@ -66,6 +66,9 @@ pub mod protocol;
 #[doc(inline)]
 pub use protocol::Binding;
 
+#[cfg(feature = "tokio-client")]
+pub mod client;
+
 #[cfg(feature = "derive")]
 #[doc(inline)]
 pub use zeek_websocket_derive::ZeekType;
