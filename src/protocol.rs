@@ -340,7 +340,6 @@ mod test {
         // Event payload should be in outbox.
         let msg =
             Message::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
-        dbg!(&msg);
         assert!(matches!(
             msg,
             Message::DataMessage {
