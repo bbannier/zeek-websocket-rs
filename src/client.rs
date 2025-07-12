@@ -91,7 +91,7 @@ impl From<ClientConfig> for Result<Client, Error> {
 /// # Tokio-based for the Zeek WebSocket API
 ///
 /// [`Client`] implements an async client for the Zeek WebSocket API. It is intended to be run
-/// inside a [`tokio`] runtime. The general workflow is to build a client with the [`ClientConfig`]
+/// inside a `tokio` runtime. The general workflow is to build a client with the [`ClientConfig`]
 /// builder interface, and then either publish or receive events.
 ///
 /// ## Example
@@ -99,7 +99,7 @@ impl From<ClientConfig> for Result<Client, Error> {
 /// ```no_run
 /// use anyhow::Result;
 /// use zeek_websocket::client::ClientConfig;
-/// pub use zeek_websocket::Event;
+/// use zeek_websocket::Event;
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<()> {
