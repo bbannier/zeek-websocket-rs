@@ -30,7 +30,7 @@ jobs:
       - name: Test
         run: cargo hack test --each-feature --workspace
       - name: Docs
-        run: cargo doc --no-deps --workspace
+        run: cargo doc --no-deps --workspace --all-features
 
   pre-commit:
     name: Run pre-commit hooks
