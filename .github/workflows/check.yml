@@ -28,7 +28,7 @@ jobs:
       - name: Check
         run: cargo hack check --each-feature --workspace
       - name: Test
-        run: cargo test --workspace
+        run: cargo hack test --each-feature --workspace
       - name: Docs
         run: cargo doc --no-deps --workspace
 

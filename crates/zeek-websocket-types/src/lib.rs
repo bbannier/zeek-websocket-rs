@@ -647,8 +647,7 @@ mod test {
     };
 
     use crate::{
-        ConversionError, Data, DeserializationError, Event, Message, ParseError, Port, Protocol,
-        Subscriptions, TableEntry, Value,
+        ConversionError, Data, Event, Message, ParseError, Port, Protocol, TableEntry, Value,
     };
     use chrono::TimeDelta;
     use ipnetwork::IpNetwork;
@@ -656,7 +655,10 @@ mod test {
     use serde_json::json;
 
     #[cfg(feature = "tungstenite")]
-    use tungstenite::Bytes;
+    use {
+        crate::{DeserializationError, Subscriptions},
+        tungstenite::Bytes,
+    };
 
     #[test]
     fn from_json() -> Result<(), serde_json::Error> {

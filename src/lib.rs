@@ -41,6 +41,7 @@
 /// User types can be serialized and deserialized with [`ZeekType`].
 ///
 /// ```
+/// # #[cfg(feature = "derive")] {
 /// # use zeek_websocket::{Value, ZeekType};
 /// #[derive(ZeekType)]
 /// struct X {
@@ -52,6 +53,7 @@
 /// let value = Value::from(x);
 /// let x = X::try_from(value);
 /// assert!(matches!(x, Ok(X{ count: 42, .. })));
+/// # }
 /// ```
 pub mod types {
     #[doc(inline)]
