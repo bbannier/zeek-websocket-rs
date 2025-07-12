@@ -7,7 +7,7 @@
 //! models [Zeek's WebSocket
 //! protocol](https://docs.zeek.org/projects/broker/en/master/web-socket.html). `Binding` depends
 //! on [`tungstenite`](https://docs.rs/tungstenite/) and uses lower-level data types defined in
-//! [`types`].
+//! [`types`]. An async `tokio`-based client is provided in [`client::Client`].
 //!
 //! Types in [`types`] can be used independently from `Binding` with any
 //! backend.
