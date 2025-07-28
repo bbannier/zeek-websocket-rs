@@ -319,11 +319,11 @@ mod test {
             .unwrap();
 
         client
-            .publish_event("/info", Event::new("info", vec!["hi!"]))
+            .publish_event("/info", Event::new("info", ["hi!"]))
             .await;
 
         client
-            .publish_event("/not-yet-subscribed", Event::new("info", vec!["hi!"]))
+            .publish_event("/not-yet-subscribed", Event::new("info", ["hi!"]))
             .await;
 
         tokio::select! {

@@ -69,7 +69,7 @@ fn serialize(c: &mut Criterion) {
     });
 
     group.bench_function("event", |b| {
-        b.iter(|| Message::new_data("ping", Event::new("ping", vec![1])))
+        b.iter(|| Message::new_data("ping", Event::new("ping", [1])))
     });
 
     group.finish();
@@ -127,7 +127,7 @@ fn zeek_roundtrip(c: &mut Criterion) {
             .unwrap();
 
         b.iter(|| {
-            let msg = Message::new_data(topic, Event::new("ping", vec!["hi!"]));
+            let msg = Message::new_data(topic, Event::new("ping", ["hi!"]));
             stream.write(msg.try_into().unwrap()).unwrap();
 
             while let Ok(resp) = stream.read() {

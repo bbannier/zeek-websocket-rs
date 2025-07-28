@@ -34,7 +34,7 @@ async fn main() -> anyhow::Result<()> {
         let end = start + duration;
 
         loop {
-            outbox.enqueue_event(TOPIC, Event::new("ping", vec!["hohi"]));
+            outbox.enqueue_event(TOPIC, Event::new("ping", ["hohi"]));
 
             while let Some(data) = outbox.next_data() {
                 tx.send(tungstenite::Message::binary(data)).await.unwrap();

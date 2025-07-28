@@ -552,8 +552,9 @@ pub struct Event {
 }
 
 impl Event {
-    pub fn new<N, A>(name: N, args: Vec<A>) -> Self
+    pub fn new<N, I, A>(name: N, args: I) -> Self
     where
+        I: IntoIterator<Item = A>,
         N: Into<String>,
         A: Into<Value>,
     {
@@ -565,8 +566,9 @@ impl Event {
     }
 
     #[must_use]
-    pub fn with_metadata<M>(mut self, metadata: Vec<M>) -> Self
+    pub fn with_metadata<I, M>(mut self, metadata: I) -> Self
     where
+        I: IntoIterator<Item = M>,
         M: Into<Value>,
     {
         self.metadata = metadata.into_iter().map(Into::into).collect();
@@ -687,7 +689,7 @@ mod test {
         );
 
         assert_eq!(
-            Message::new_data("/foo/bar", Event::new("pong", vec![42u64]),),
+            Message::new_data("/foo/bar", Event::new("pong", [42u64]),),
             serde_json::from_value(json!({
                 "type": "data-message",
                 "topic": "/foo/bar",
@@ -721,7 +723,7 @@ mod test {
     #[cfg(feature = "tungstenite")]
     #[test]
     fn message_try_from_into_tungstenite() {
-        let event = Message::new_data("my_topic", Event::new("my_event", vec![1]));
+        let event = Message::new_data("my_topic", Event::new("my_event", [1]));
 
         let msg: tungstenite::Message = event.clone().try_into().unwrap();
         let event2: Message = msg.try_into().unwrap();

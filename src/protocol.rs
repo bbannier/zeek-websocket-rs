@@ -311,10 +311,8 @@ mod test {
         assert_eq!(conn.receive_event(), Ok(None));
 
         // Receive a single event.
-        conn.handle_incoming(
-            Message::new_data(topic, Event::new("ping", Vec::<Value>::new())).into(),
-        )
-        .unwrap();
+        conn.handle_incoming(Message::new_data(topic, Event::new("ping", [(); 0])).into())
+            .unwrap();
 
         assert!(matches!(
             conn.inbox.next_message(),
@@ -334,7 +332,7 @@ mod test {
         conn.handle_incoming(ack().into()).unwrap();
 
         // Send an event.
-        conn.publish_event("foo", Event::new("ping", Vec::<Value>::new()))
+        conn.publish_event("foo", Event::new("ping", [(); 0]))
             .unwrap();
 
         // Event payload should be in outbox.
@@ -370,7 +368,7 @@ mod test {
         assert_eq!(subscription, Subscriptions::from(&["foo"]));
 
         // Sent a message on `"bar"` to which we are not subscribed.
-        let event = Event::new("ping", vec!["ping on 'bar'"]);
+        let event = Event::new("ping", ["ping on 'bar'"]);
         assert_eq!(
             conn.publish_event("bar", event.clone()),
             Err(ProtocolError::SendOnNonSubscribed(
@@ -414,10 +412,7 @@ mod test {
 
         // Put an ACK and an event into the inbox.
         let _ = conn.handle_incoming(ack());
-        let _ = conn.handle_incoming(Message::new_data(
-            "topic",
-            Event::new("ping", Vec::<Value>::new()),
-        ));
+        let _ = conn.handle_incoming(Message::new_data("topic", Event::new("ping", [(); 0])));
 
         // Event though we have an ACK in the inbox `receive_event`
         // discards it and returns the event.
@@ -454,7 +449,7 @@ mod test {
         // Consume the subscription.
         conn.outgoing().unwrap();
 
-        conn.publish_event("foo", Event::new("ping", Vec::<Value>::new()))
+        conn.publish_event("foo", Event::new("ping", [(); 0]))
             .unwrap();
         let message =
             Message::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
