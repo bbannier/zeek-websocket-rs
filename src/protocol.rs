@@ -58,7 +58,6 @@ use crate::types::Subscriptions;
 /// See the [module documentation](crate::protocol) for an introduction
 pub struct Binding {
     state: State,
-    subscriptions: Subscriptions,
 
     inbox: Inbox,
     outbox: Outbox,
@@ -85,8 +84,7 @@ impl Binding {
         Self {
             state: State::Subscribing,
             inbox: Inbox(VecDeque::new()),
-            outbox: Outbox(VecDeque::from([subscriptions.clone().into()])),
-            subscriptions,
+            outbox: Outbox(VecDeque::from([subscriptions.into()])),
         }
     }
 
@@ -154,42 +152,21 @@ impl Binding {
     }
 
     /// Enqueue a message for sending.
-    fn enqueue(&mut self, message: Message) -> Result<(), ProtocolError> {
+    fn enqueue(&mut self, message: Message) {
         match message {
             Message::DataMessage { topic, data } => {
-                let is_subscribed = self
-                    .subscriptions
-                    .0
-                    .iter()
-                    .any(|s| s.as_str() == topic.as_str());
-
-                if is_subscribed {
-                    self.outbox.enqueue(Message::DataMessage { topic, data });
-                } else {
-                    return Err(ProtocolError::SendOnNonSubscribed(
-                        topic,
-                        self.subscriptions.clone(),
-                        data,
-                    ))?;
-                }
+                self.outbox.enqueue(Message::DataMessage { topic, data });
             }
             _ => self.outbox.enqueue(message),
         }
-
-        Ok(())
     }
 
     /// Enqueue an event for sending.
-    ///
-    /// # Errors
-    ///
-    /// Will return [`ProtocolError::SendOnNonSubscribed`] if the binding is not subscribed to the
-    /// topic of the message.
-    pub fn publish_event<S>(&mut self, topic: S, event: Event) -> Result<(), ProtocolError>
+    pub fn publish_event<S>(&mut self, topic: S, event: Event)
     where
         S: Into<String>,
     {
-        self.enqueue(Message::new_data(topic.into(), event))
+        self.enqueue(Message::new_data(topic.into(), event));
     }
 
     /// Split the `Binding` into an [`Inbox`] and [`Outbox`].
@@ -269,9 +246,6 @@ pub enum ProtocolError {
     #[error("received an ACK while already subscribed")]
     AlreadySubscribed,
 
-    #[error("attempted to send on topic '{0}' but only subscribed to '{1}'")]
-    SendOnNonSubscribed(String, Subscriptions, Data),
-
     #[error("Zeek error {code}: {context}")]
     ZeekError { code: String, context: String },
 
@@ -332,8 +306,7 @@ mod test {
         conn.handle_incoming(ack().into()).unwrap();
 
         // Send an event.
-        conn.publish_event("foo", Event::new("ping", [(); 0]))
-            .unwrap();
+        conn.publish_event("foo", Event::new("ping", [(); 0]));
 
         // Event payload should be in outbox.
         let msg =
@@ -356,27 +329,6 @@ mod test {
         inbox.handle(ack().into());
 
         assert!(matches!(inbox.next_message(), Some(Message::Ack { .. })));
-    }
-
-    #[test]
-    fn send_on_non_subscribed() {
-        let mut conn = Binding::new(&["foo"]);
-
-        // The initial message is the subscription to `["foo"]`.
-        let message = tungstenite::Message::binary(conn.outgoing().unwrap());
-        let subscription = Subscriptions::try_from(message).unwrap();
-        assert_eq!(subscription, Subscriptions::from(&["foo"]));
-
-        // Sent a message on `"bar"` to which we are not subscribed.
-        let event = Event::new("ping", ["ping on 'bar'"]);
-        assert_eq!(
-            conn.publish_event("bar", event.clone()),
-            Err(ProtocolError::SendOnNonSubscribed(
-                "bar".to_string(),
-                Subscriptions::from(&["foo"]),
-                Data::Event(event),
-            ))
-        );
     }
 
     #[test]
@@ -449,8 +401,7 @@ mod test {
         // Consume the subscription.
         conn.outgoing().unwrap();
 
-        conn.publish_event("foo", Event::new("ping", [(); 0]))
-            .unwrap();
+        conn.publish_event("foo", Event::new("ping", [(); 0]));
         let message =
             Message::try_from(tungstenite::Message::binary(conn.outgoing().unwrap())).unwrap();
         let Message::DataMessage {

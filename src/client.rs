@@ -69,11 +69,11 @@ impl From<ClientConfig> for Result<Client, Error> {
             .map(|topic| {
                 let client = TopicHandler::new(
                     app_name.clone(),
-                    topic.clone(),
+                    Some(topic.clone()),
                     endpoint.clone(),
                     events_sender.clone(),
                 );
-                Ok::<(std::string::String, TopicHandler), Error>((topic, client))
+                Ok::<(Option<String>, TopicHandler), Error>((Some(topic), client))
             })
             .collect();
         let bindings = Arc::new(RwLock::<HashMap<_, _>>::new(bindings?));
@@ -128,29 +128,35 @@ pub struct Client {
     app_name: String,
 
     endpoint: Uri,
-    bindings: Arc<RwLock<HashMap<String, TopicHandler>>>,
+    bindings: Arc<RwLock<HashMap<Option<String>, TopicHandler>>>,
 
     events: Receiver<Result<(String, Event), ProtocolError>>,
     events_sender: Sender<Result<(String, Event), ProtocolError>>,
 }
 
 impl Client {
-    /// Publish an [`Event`] to `topic`. The client will be automatically subscribed to the topic
-    /// if is not already.
+    /// Publish an [`Event`] to `topic`.
     pub async fn publish_event<S: Into<String>>(&mut self, topic: S, event: Event) {
         let topic = topic.into();
 
         let mut bindings = self.bindings.write().await;
-        let client = bindings.entry(topic.clone()).or_insert_with(|| {
-            TopicHandler::new(
-                self.app_name.clone(),
-                topic.clone(),
-                self.endpoint.clone(),
-                self.events_sender.clone(),
-            )
-        });
 
-        let _ = client.publish_sink.send((topic, event)).await;
+        let client = if let Some(client) = bindings.get(&Some(topic.clone())) {
+            // If we are subscribed to a topic use its handler for publishing the event.
+            client
+        } else {
+            // Else use a null handler which does not receive events, but can still publish.
+            bindings.entry(None).or_insert_with(|| {
+                TopicHandler::new(
+                    self.app_name.clone(),
+                    None,
+                    self.endpoint.clone(),
+                    self.events_sender.clone(),
+                )
+            })
+        };
+
+        let _ = client.publish_sink.send((topic.clone(), event)).await;
     }
 
     /// Receive the next [`Event`] or [`Error`].
@@ -172,10 +178,10 @@ impl Client {
         let topic = topic.into();
 
         let mut bindings = self.bindings.write().await;
-        bindings.entry(topic.clone()).or_insert_with(|| {
+        bindings.entry(Some(topic.clone())).or_insert_with(|| {
             TopicHandler::new(
                 self.app_name.clone(),
-                topic,
+                Some(topic),
                 self.endpoint.clone(),
                 self.events_sender.clone(),
             )
@@ -187,7 +193,7 @@ impl Client {
     /// This is a noop if the client was not subscribed.
     pub async fn unsubscribe(&mut self, topic: &str) -> bool {
         let mut bindings = self.bindings.write().await;
-        bindings.remove(topic).is_some()
+        bindings.remove(&Some(topic.to_string())).is_some()
     }
 }
 
@@ -199,14 +205,19 @@ struct TopicHandler {
 impl TopicHandler {
     fn new(
         app_name: String,
-        topic: String,
+        topic: Option<String>,
         endpoint: Uri,
         events_sender: Sender<Result<(String, Event), ProtocolError>>,
     ) -> Self {
         let (publish_sink, mut publish) = channel(1);
 
         let loop_ = tokio::spawn(async move {
-            let mut binding = Binding::new(vec![topic.clone()]);
+            let topics = if let Some(topic) = &topic {
+                vec![topic.clone()]
+            } else {
+                vec![]
+            };
+            let mut binding = Binding::new(topics);
 
             let endpoint =
                 ClientRequestBuilder::new(endpoint).with_header("X-Application-Name", app_name);
@@ -217,14 +228,16 @@ impl TopicHandler {
                 tokio::select! {
                     r = publish.recv() => {
                         let Some((topic, event)) = r else { return Ok(()); };
-                        binding.publish_event::<String>(topic, event)?;
+                        binding.publish_event::<String>(topic, event);
                     }
                     s = stream.next() => {
                         if let Ok(message) = match s {
                             Some(payload) => match payload {
                                 Ok(p) => p.try_into(),
                                 Err(e) => {
-                                    handle_transport_error(e, &mut binding, &topic)?;
+                                    if let Some(topic) = &topic {
+                                        handle_transport_error(e, &mut binding, topic)?;
+                                    }
                                     continue;
                                 },
                             },
@@ -237,8 +250,10 @@ impl TopicHandler {
                 };
 
                 while let Some(bin) = binding.outgoing() {
-                    if let Err(e) = stream.send(tungstenite::Message::binary(bin)).await {
-                        handle_transport_error(e, &mut binding, &topic)?;
+                    if let Err(e) = stream.send(tungstenite::Message::binary(bin)).await
+                        && let Some(topic) = &topic
+                    {
+                        handle_transport_error(e, &mut binding, topic)?;
                     }
                 }
 

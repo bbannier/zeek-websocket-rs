@@ -22,7 +22,7 @@ fn main() -> anyhow::Result<()> {
         if let Some((topic, Event { name, args, .. })) = conn.receive_event()? {
             // If we received a `ping` event, respond with a `pong`.
             if name == "ping" {
-                conn.publish_event(topic, Event::new("pong", args))?;
+                conn.publish_event(topic, Event::new("pong", args));
             }
         }
     }
