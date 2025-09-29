@@ -46,6 +46,7 @@ jobs:
         with:
           channel: stable
           bins: cargo-hack
+          components: clippy,rustfmt
       - uses: actions/setup-python@v6
       - uses: pre-commit/action@v3.0.1
 
