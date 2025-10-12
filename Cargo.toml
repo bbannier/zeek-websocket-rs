@@ -50,7 +50,6 @@ criterion = { version = "2.10.1", default-features = false, features = ["async_t
 document-features = { version = "0.2.11", features = ["default"], default-features = false }
 futures-util = { version = "0.3.31", default-features = false }
 ipnetwork = { version = "0.21.1", default-features = false }
-iso8601 = { version = "0.6.3", default-features = false }
 proc-macro-error2 = { version = "2.0.1", default-features = false }
 proc-macro2 = { version = "1.0.95", default-features = false }
 quote = { version = "1.0.40", default-features = false }

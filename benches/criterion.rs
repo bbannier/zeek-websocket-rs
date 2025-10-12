@@ -12,7 +12,7 @@ use ipnetwork::Ipv4Network;
 use tungstenite::{client::IntoClientRequest, connect};
 use zeek_websocket::{
     Data, Event, Message, Subscriptions,
-    types::{DateTime, IpNetwork, Port, Protocol, TimeDelta, Value},
+    types::{IpNetwork, NaiveDateTime, Port, Protocol, TimeDelta, Value},
 };
 
 fn serialize(c: &mut Criterion) {
@@ -39,7 +39,7 @@ fn serialize(c: &mut Criterion) {
         b.iter(|| serde_json::to_string(&Value::from(timespan)))
     });
     group.bench_function("timestamp", |b| {
-        let timestamp = DateTime::default();
+        let timestamp = NaiveDateTime::default();
         b.iter(|| serde_json::to_string(&Value::from(timestamp)))
     });
     group.bench_function("string", |b| {

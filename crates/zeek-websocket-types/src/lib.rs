@@ -9,11 +9,9 @@ use std::{
 use thiserror::Error;
 
 #[doc(no_inline)]
-pub use chrono::TimeDelta;
+pub use chrono::{NaiveDateTime, TimeDelta};
 #[doc(no_inline)]
 pub use ipnetwork::IpNetwork;
-#[doc(no_inline)]
-pub use iso8601::DateTime;
 
 /// Enum for all basic types understood by Zeek's WebSocket API.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -26,7 +24,8 @@ pub enum Value {
     Real(f64),
     #[serde(with = "timespan")]
     Timespan(TimeDelta),
-    Timestamp(DateTime),
+    #[serde(with = "timestamp")]
+    Timestamp(NaiveDateTime),
     String(String),
     #[serde(rename = "enum-value")]
     EnumValue(String),
@@ -79,7 +78,7 @@ impl_T!(i8, Value::Integer);
 impl_T!(f64, Value::Real);
 impl_from_T!(f32, Value::Real);
 impl_T!(TimeDelta, Value::Timespan);
-impl_T!(DateTime, Value::Timestamp);
+impl_T!(NaiveDateTime, Value::Timestamp);
 impl_T!(String, Value::String);
 impl_from_T!(&str, Value::String);
 impl_T!(IpAddr, Value::Address);
@@ -135,6 +134,9 @@ pub enum ParseError {
 
     #[error("invalid timespan unit '{0}'")]
     InvalidTimespanUnit(String),
+
+    #[error("invalid timestamp: {0}")]
+    InvalidTimestamp(String),
 }
 
 /// Error enum for Zeek-related serialization errors.
@@ -240,6 +242,34 @@ pub enum Protocol {
     UDP,
     ICMP,
     UNKNOWN,
+}
+
+mod timestamp {
+    use super::ParseError;
+    use chrono::NaiveDateTime;
+    use serde::{Deserialize, de};
+    use std::str::FromStr;
+
+    pub fn serialize<S>(timestamp: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let date = timestamp.date();
+        let time = timestamp.time();
+
+        serializer.serialize_str(&format!("{date}T{time}"))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = <String>::deserialize(deserializer)?;
+        NaiveDateTime::from_str(&s).map_err(|e| {
+            use de::Error;
+            D::Error::custom(ParseError::InvalidTimestamp(e.to_string()))
+        })
+    }
 }
 
 mod timespan {
@@ -651,9 +681,8 @@ mod test {
     use crate::{
         ConversionError, Data, Event, Message, ParseError, Port, Protocol, TableEntry, Value,
     };
-    use chrono::TimeDelta;
+    use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeDelta};
     use ipnetwork::IpNetwork;
-    use iso8601::DateTime;
     use serde_json::json;
 
     #[cfg(feature = "tungstenite")]
@@ -774,7 +803,7 @@ mod test {
             serde_json::from_value(json!({"@data-type": "timespan", "data": "1500ms"})).unwrap()
         );
         assert_eq!(
-            Value::from("2022-04-10T07:00:00.000".parse::<DateTime>().unwrap()),
+            Value::from("2022-04-10T07:00:00.000".parse::<NaiveDateTime>().unwrap()),
             serde_json::from_value(
                 json!({"@data-type": "timestamp", "data": "2022-04-10T07:00:00.000"})
             )
@@ -890,8 +919,8 @@ mod test {
             Ok(TimeDelta::seconds(1))
         );
         assert_eq!(
-            Value::from(DateTime::default()).try_into(),
-            Ok(DateTime::default())
+            Value::from(NaiveDateTime::default()).try_into(),
+            Ok(NaiveDateTime::default())
         );
 
         let addr = IpAddr::from_str("::0").unwrap();
@@ -1061,6 +1090,35 @@ mod test {
             .unwrap()
             .to_string(),
             "value not representable: 'PT3144960000000000.000000001S' needs nanosecond accuracy but exceeds its range"
+        );
+    }
+
+    #[test]
+    fn timestamp() {
+        let value = Value::from(NaiveDateTime::new(
+            NaiveDate::from_ymd_opt(2014, 8, 12).unwrap(),
+            NaiveTime::from_hms_nano_opt(1, 2, 3, 4).unwrap(),
+        ));
+
+        let json = json!(
+            {"@data-type": "timestamp", "data":"2014-08-12T01:02:03.000000004"}
+        );
+
+        assert_eq!(
+            serde_json::to_string(&value).unwrap(),
+            serde_json::to_string(&json).unwrap()
+        );
+
+        assert_eq!(serde_json::from_value::<Value>(json).unwrap(), value);
+
+        assert_eq!(
+            dbg!(serde_json::from_value::<Value>(
+                json!({"@data-type": "timestamp", "data":"2014-99-99T01:02:03.000000004"}),
+            ))
+            .err()
+            .unwrap()
+            .to_string(),
+            "invalid timestamp: input is out of range"
         );
     }
 }

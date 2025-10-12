@@ -13,7 +13,6 @@ tungstenite = ["dep:tungstenite", "dep:serde_json"]
 [dependencies]
 chrono = { workspace = true }
 ipnetwork = { workspace = true, features = ["serde"] }
-iso8601 = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true }
