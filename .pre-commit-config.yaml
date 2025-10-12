@@ -30,7 +30,7 @@ repos:
     hooks:
       - id: prettier
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.7
+    rev: v1.7.8
     hooks:
       - id: actionlint
 
@@ -38,3 +38,27 @@ repos:
     rev: v1.16.3
     hooks:
       - id: zizmor
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.3
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.2
+    hooks:
+      - id: mypy
+        args: [--strict]
+        additional_dependencies:
+          - pytest
+          - fastapi
+          - uvicorn
+          - types-requests
+          - websockets
+
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.24.1
+    hooks:
+      - id: validate-pyproject
