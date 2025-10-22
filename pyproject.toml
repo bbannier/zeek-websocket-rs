@@ -34,6 +34,11 @@ addopts = "--cov --cov-report html --cov-report term"
 testpaths = [
     "bindings/python/tests",
 ]
+filterwarnings = [
+    "ignore:websockets.legacy is deprecated",
+    "ignore:websockets.server.WebSocketServerProtocol is deprecated",
+    "ignore: remove second argument of ws_handler",
+]
 
 [tool.ruff.lint]
 select = ["C4", "F", "I", "ISC", "UP", "D"]
