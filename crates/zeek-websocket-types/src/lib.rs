@@ -389,8 +389,8 @@ impl FromStr for Protocol {
 /// An entry in a table in a [`Value::Table`].
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct TableEntry {
-    key: Value,
-    value: Value,
+    pub key: Value,
+    pub value: Value,
 }
 
 impl TableEntry {

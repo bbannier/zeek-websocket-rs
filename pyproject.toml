@@ -1,0 +1,53 @@
+[build-system]
+requires = ["maturin>=1.9,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "zeek_websocket"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+dynamic = ["version"]
+dependencies = [
+    "websockets>=15.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "fastapi>=0.119.1",
+    "pytest-cov>=7.0.0",
+    "pytest>=8.3.5",
+    "requests>=2.32.5",
+    "types-requests>=2.32.4.20250913",
+    "uvicorn>=0.38.0",
+]
+
+[tool.maturin]
+features = ["python", "pyo3/extension-module"]
+python-source = "bindings/python"
+
+[tool.pytest.ini_options]
+addopts = "--cov --cov-report html --cov-report term"
+testpaths = [
+    "bindings/python/tests",
+]
+filterwarnings = [
+    "ignore:websockets.legacy is deprecated",
+    "ignore:websockets.server.WebSocketServerProtocol is deprecated",
+    "ignore: remove second argument of ws_handler",
+]
+
+[tool.ruff.lint]
+select = ["C4", "F", "I", "ISC", "UP", "D"]
+ignore = ["D203", "D213"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/bindings/python/tests/*" = ["D"]
+
+[tool.mypy]
+mypy_path = [
+    "bindings/python"
+]

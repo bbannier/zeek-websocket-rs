@@ -18,9 +18,15 @@ derive = ["dep:zeek-websocket-derive"]
 ## Enables conversions to and from [`tungstenite`](https://docs.rs/tungstenite/) messages.
 tungstenite = ["dep:tungstenite", "dep:serde_json"]
 
+## Enables Python bindings.
+python = ["dep:pyo3", "dep:chrono", "dep:ipnetwork", "dep:serde_json", "dep:ordered-float", "tungstenite"]
+
 [dependencies]
 document-features = { workspace = true }
 futures-util = { workspace = true, optional = true }
+pyo3 = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+ipnetwork = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"], optional = true }
@@ -29,6 +35,7 @@ tungstenite = { workspace = true, optional = true }
 typed-builder = { workspace = true, optional = true }
 zeek-websocket-derive = { workspace = true, optional = true }
 zeek-websocket-types = { workspace = true }
+ordered-float = { workspace = true, optional = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
@@ -50,8 +57,10 @@ criterion = { version = "2.10.1", default-features = false, features = ["async_t
 document-features = { version = "0.2.11", features = ["default"], default-features = false }
 futures-util = { version = "0.3.31", default-features = false }
 ipnetwork = { version = "0.21.1", default-features = false }
+ordered-float = {version = "5.1.0", default-features = false }
 proc-macro-error2 = { version = "2.0.1", default-features = false }
 proc-macro2 = { version = "1.0.95", default-features = false }
+pyo3 = { version = "0.27.0", features = ["chrono", "ordered-float"] }
 quote = { version = "1.0.40", default-features = false }
 serde = { version = "1.0.219", default-features = false }
 serde_json = { version = "1.0.140", features = ["std"], default-features = false }
