@@ -61,7 +61,7 @@ tokio = { version = "1.45.1", default-features = false }
 tokio-tungstenite = { version = "0.28.0", features = ["connect"], default-features = false }
 trybuild = { version = "1.0.105", default-features = false }
 tungstenite = { version = "0.28.0", features = ["handshake"], default-features = false }
-typed-builder = { version = "0.22.0", default-features = false }
+typed-builder = { version = "0.23.0", default-features = false }
 zeek-websocket-derive = { path = "crates/zeek-websocket-derive" }
 zeek-websocket-types = { path = "crates/zeek-websocket-types" }
 
