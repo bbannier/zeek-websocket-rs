@@ -5,9 +5,7 @@ on:
     branches:
       - main
 
-permissions:
-  pages: write
-  id-token: write
+permissions: {}
 
 # Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
 # However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
@@ -29,7 +27,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup rust toolchain
-        uses: moonrepo/setup-rust@v1
+        uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670
         with:
           channel: stable
           cache-target: release
@@ -51,6 +49,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
+    permissions:
+      pages: write
+      id-token: write
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
