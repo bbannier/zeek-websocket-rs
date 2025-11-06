@@ -398,16 +398,6 @@ impl TableEntry {
     pub fn new(key: Value, value: Value) -> Self {
         TableEntry { key, value }
     }
-
-    #[must_use]
-    pub fn key(&self) -> &Value {
-        &self.key
-    }
-
-    #[must_use]
-    pub fn value(&self) -> &Value {
-        &self.value
-    }
 }
 
 impl<K, V> From<(K, V)> for TableEntry
@@ -1010,8 +1000,8 @@ mod test {
         );
 
         let t = TableEntry::new("one".into(), 1u8.into());
-        assert_eq!(t.key().clone(), Value::String("one".into()));
-        assert_eq!(t.value().clone(), Value::Count(1));
+        assert_eq!(t.key, Value::String("one".into()));
+        assert_eq!(t.value, Value::Count(1));
 
         let table: HashMap<_, _> = [(1, 11), (2, 22), (3, 33)].iter().copied().collect();
         let Value::Table(xs) = Value::from(table) else {
