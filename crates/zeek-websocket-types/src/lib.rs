@@ -389,24 +389,14 @@ impl FromStr for Protocol {
 /// An entry in a table in a [`Value::Table`].
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct TableEntry {
-    key: Value,
-    value: Value,
+    pub key: Value,
+    pub value: Value,
 }
 
 impl TableEntry {
     #[must_use]
     pub fn new(key: Value, value: Value) -> Self {
         TableEntry { key, value }
-    }
-
-    #[must_use]
-    pub fn key(&self) -> &Value {
-        &self.key
-    }
-
-    #[must_use]
-    pub fn value(&self) -> &Value {
-        &self.value
     }
 }
 
@@ -1010,8 +1000,8 @@ mod test {
         );
 
         let t = TableEntry::new("one".into(), 1u8.into());
-        assert_eq!(t.key().clone(), Value::String("one".into()));
-        assert_eq!(t.value().clone(), Value::Count(1));
+        assert_eq!(t.key, Value::String("one".into()));
+        assert_eq!(t.value, Value::Count(1));
 
         let table: HashMap<_, _> = [(1, 11), (2, 22), (3, 33)].iter().copied().collect();
         let Value::Table(xs) = Value::from(table) else {
