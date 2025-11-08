@@ -1,0 +1,77 @@
+# Copyright (c) 2020-now by the Zeek Project. See LICENSE for details.
+---
+Checks: "
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-exception-escape,
+  -bugprone-reserved-identifier,
+  -bugprone-branch-clone,
+  -bugprone-macro-parentheses,
+  -bugprone-lambda-function-name,
+  -bugprone-unchecked-optional-access,
+  -bugprone-switch-missing-default-case,
+  -bugprone-empty-catch,
+  -bugprone-forward-declaration-namespace,
+
+  cert-*,
+  -cert-dcl37-c,
+  -cert-dcl51-cpp,
+  -cert-err58-cpp,
+  -cert-dcl58-cpp,
+  -cert-dcl21-cpp,
+  -cert-err33-c,
+
+  clang*,
+  -clang-analyzer-cplusplus.NewDeleteLeaks,
+  -clang-analyzer-option.core.EnumCastOutOfRange,
+  -clang-diagnostic-c++2a-designator,
+  -clang-diagnostic-deprecated-copy,
+  -clang-diagnostic-range-loop-analysis,
+  -clang-analyzer-core.StackAddressEscape,
+
+  misc-*,
+  -misc-macro-parentheses,
+  -misc-non-private-member-variables-in-classes,
+  -misc-suspicious-semicolon,
+  -misc-no-recursion,
+  -misc-unused-parameters,
+  -misc-const-correctness,
+  -misc-confusable-identifiers,
+  -misc-const-correctness,
+  -misc-use-anonymous-namespace,
+  -misc-include-cleaner,
+
+  modernize-*,
+  -modernize-avoid-c-arrays,
+  -modernize-use-equals-default,
+  -modernize-use-nodiscard,
+  -modernize-use-trailing-return-type,
+  -modernize-return-braced-init-list,
+  -modernize-macro-to-enum,
+
+  performance-*,
+  -performance-enum-size,
+
+  portability-*,
+  -portability-avoid-pragma-once,
+
+  readability-*,
+  -readability-braces-around-statements,
+  -readability-container-size-empty,
+  -readability-convert-member-functions-to-static,
+  -readability-else-after-return,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-length,
+  -readability-implicit-bool-conversion,
+  -readability-magic-numbers,
+  -readability-make-member-function-const,
+  -readability-named-parameter,
+  -readability-simplify-boolean-expr,
+  -readability-use-anyofallof,
+  -readability-identifier-length,
+  -readability-implicit-bool-conversion,
+  -readability-use-concise-preprocessor-directives,
+  "
+
+HeaderFilterRegex: '(hilti|spicy)/[a-zA-Z-]+/include/([a-zA-Z-]+/)*[a-zA-Z-]+\.h'
+WarningsAsErrors: "*"

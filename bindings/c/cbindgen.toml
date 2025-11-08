@@ -1,0 +1,11 @@
+language = "C"
+cpp_compat = true
+
+[export]
+prefix = "zws_"
+
+[enum]
+rename_variants = "QualifiedScreamingSnakeCase"
+
+[ptr]
+non_null_attribute = " /*_Nonnull*/"

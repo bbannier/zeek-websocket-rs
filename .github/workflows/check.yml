@@ -17,7 +17,7 @@ permissions: {}
 jobs:
   test:
     name: Run tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
         with:
@@ -27,6 +27,13 @@ jobs:
         with:
           channel: stable
           bins: cargo-hack
+      - name: Install Zeek
+        run: |
+          echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_24.04/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
+          curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_24.04/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y zeek
+          echo /opt/zeek/bin >> "${GITHUB_PATH}"
       - name: Check
         run: cargo hack check --each-feature --workspace
       - name: Test
@@ -58,6 +65,28 @@ jobs:
       - run: uv python install
       - run: uv sync --all-extras
       - run: uv run pytest
+
+  c:
+    name: C bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670
+        with:
+          channel: stable
+          bins: cbindgen
+      - name: Create archive
+        run: |
+          git archive --prefix=zeek-websocket-rs/ HEAD > bindings/c/examples/zeek-websocket-rs.tar
+      - name: Patch CMake setup
+        run: |
+          sed -i "s~GIT_REPOSITORY.*$~URL\ file://\${CMAKE_CURRENT_SOURCE_DIR}/zeek-websocket-rs.tar~" bindings/c/examples/CMakeLists.txt
+      - uses: threeal/cmake-action@725d1314ccf9ea922805d7e3f9d9bcbca892b406
+        with:
+          source-dir: bindings/c/examples
 
   pre-commit:
     name: Run pre-commit hooks

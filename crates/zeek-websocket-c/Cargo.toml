@@ -1,0 +1,19 @@
+[package]
+name = "zeek-websocket-c"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["staticlib", "cdylib"]
+
+[dependencies]
+chrono = { workspace = true }
+futures-util = { workspace = true }
+libc = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
+tokio-tungstenite = { workspace = true }
+tungstenite = { workspace = true }
+zeek-websocket = { path = "../..", default-features = false, features = ["tungstenite"] }
+
+[build-dependencies]
+cbindgen = "0.29.2"

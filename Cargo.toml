@@ -48,7 +48,11 @@ tokio-tungstenite = { workspace = true }
 tungstenite = { workspace = true, features = ["native-tls"] }
 
 [workspace]
-members = ["crates/zeek-websocket-derive", "crates/zeek-websocket-types"]
+members = [
+    "crates/zeek-websocket-c",
+    "crates/zeek-websocket-derive",
+    "crates/zeek-websocket-types"
+]
 
 [workspace.dependencies]
 anyhow = { version = "1.0.98", default-features = false }
@@ -58,6 +62,7 @@ document-features = { version = "0.2.11", features = ["default"], default-featur
 futures-util = { version = "0.3.31", default-features = false }
 ipnetwork = { version = "0.21.1", default-features = false }
 ordered-float = {version = "5.1.0", default-features = false }
+libc = { version = "0.2.177" }
 proc-macro-error2 = { version = "2.0.1", default-features = false }
 proc-macro2 = { version = "1.0.95", default-features = false }
 pyo3 = { version = "0.27.0", features = ["chrono", "ordered-float"] }
