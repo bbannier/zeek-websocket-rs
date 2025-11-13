@@ -35,9 +35,9 @@ jobs:
           sudo apt-get install -y zeek
           echo /opt/zeek/bin >> "${GITHUB_PATH}"
       - name: Check
-        run: cargo hack check --each-feature --workspace
+        run: cargo hack check --feature-powerset --workspace
       - name: Test
-        run: cargo hack test --each-feature --workspace
+        run: cargo hack test --feature-powerset --workspace
       - name: Docs
         run: cargo doc --no-deps --workspace --all-features
 
