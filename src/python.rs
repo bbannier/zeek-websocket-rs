@@ -14,11 +14,37 @@ use pyo3::{
 };
 use zeek_websocket_types::{TableEntry, Value as RustValue};
 
+/// Construct a new value and infers its type.
+///
+/// This often does the right thing, but the mapping from Python types to Zeek
+/// WebSocket values is not unambiguous, e.g., a Zeek `Count` and `Integer`
+/// both map onto Python `int` instances, so constructing `Count` or `Integer`
+/// with this function is unsupported (instead we always return a `Real`). Use
+/// constructors of concrete types instead, e.g., `Value.Count` and
+/// `Value.Integer`.
 #[pyfunction]
 fn make_value(data: Value) -> Value {
     data
 }
 
+/// Zeek WebSocket API representation of Python values.
+///
+/// A Python representation of the `Value` can be accessed via to `value`
+/// attribute, e.g., for a `Value.Count` this would hold a Python `int`. For
+/// the container types `Value.Vector`, `Value.Set` and `Value.Table` it is a
+/// native Python container value holding `Value` instances, e.g.,
+///
+/// ```python
+/// x = Value.Vector[1.0, 2.0]
+/// x.value == [Value.Real(1.0), Value.Real(2.0)]
+/// ```
+///
+/// Instances of `Value.Enum` hold a Python `str`, and `Value.Record` a Python
+/// `list[Value]` or `dict[str, Value]`; use `as_enum` and `as_record` to
+/// create native Python instances.
+///
+/// Attributes:
+///     value: A Python value corresponding to the `Value`.
 #[derive(Debug, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 #[pyclass(skip_from_py_object, eq, frozen, hash)]
 enum Value {
@@ -120,12 +146,14 @@ impl Value {
         format!("{self:?}")
     }
 
+    /// Serialize to Zeek WebSocket JSON format.
     fn serialize_json(&self) -> PyResult<String> {
         let value = RustValue::try_from(self.clone())?;
         serde_json::to_string(&value)
             .map_err(|e| PyRuntimeError::new_err(format!("cannot serialize value: {e:?}")))
     }
 
+    /// Deserialize from Zeek WebSocket JSON format.
     #[staticmethod]
     fn deserialize_json(data: &str) -> PyResult<Value> {
         let value: RustValue = serde_json::from_str(data)
@@ -134,6 +162,9 @@ impl Value {
         Ok(value.into())
     }
 
+    /// Convert to a given target enum instance.
+    ///
+    /// `T` must refer to a class which derives from `enum.Enum` or similar.
     #[allow(clippy::needless_pass_by_value)]
     fn as_record(&self, py: Python, target_type: Py<PyType>) -> PyResult<Option<Py<PyAny>>> {
         let dataclasses = py.import("dataclasses")?;
@@ -162,6 +193,9 @@ impl Value {
         )?));
     }
 
+    /// Convert to a given target enum instance.
+    ///
+    /// `T` must refer to a class which derives from `enum.Enum` or similar.
     #[allow(clippy::needless_pass_by_value)]
     fn as_enum(&self, py: Python, target_type: Py<PyType>) -> PyResult<Option<Py<PyAny>>> {
         if let Value::Enum(name) = self {
@@ -305,6 +339,7 @@ impl From<Protocol> for zeek_websocket_types::Protocol {
     }
 }
 
+/// API representation of Zeek event.
 #[derive(Debug, Clone, PartialEq)]
 #[pyclass(eq, frozen)]
 struct Event(zeek_websocket_types::Event);
@@ -324,17 +359,20 @@ impl Event {
         ))
     }
 
+    /// Event name.
     #[getter(name)]
     fn name(&self) -> &str {
         &self.0.name
     }
 
+    /// Event arguments.
     #[getter(args)]
     fn args(&self) -> PyResult<Vec<Value>> {
         let xs: Result<_, _> = self.0.args.iter().cloned().map(Value::try_from).collect();
         Ok(xs?)
     }
 
+    /// Event metadata.
     #[getter(metadata)]
     fn metadata(&self) -> PyResult<Vec<Value>> {
         let xs: Result<_, _> = self
@@ -347,11 +385,13 @@ impl Event {
         Ok(xs?)
     }
 
+    /// Serialize to Zeek WebSocket JSON format.
     fn serialize_json(&self) -> PyResult<String> {
         serde_json::to_string(&zeek_websocket_types::Data::from(self.0.clone()))
             .map_err(|e| PyRuntimeError::new_err(format!("cannot serialize event: {e:?}")))
     }
 
+    /// Deserialize from Zeek WebSocket JSON format.
     #[staticmethod]
     fn deserialize_json(data: &str) -> PyResult<Event> {
         let value: zeek_websocket_types::Data = serde_json::from_str(data)
@@ -369,6 +409,7 @@ impl Event {
 #[pyclass]
 struct ProtocolBinding(crate::protocol::Binding);
 
+/// Sans-I/O wrapper for the Zeek WebSocket protocol.
 #[pymethods]
 impl ProtocolBinding {
     #[new]
@@ -376,6 +417,7 @@ impl ProtocolBinding {
         Self(crate::protocol::Binding::new(subscriptions))
     }
 
+    /// Handle received message.
     fn handle_incoming(&mut self, data: &Bound<PyBytes>) -> PyResult<()> {
         let message = serde_json::from_slice(data.as_bytes())
             .map_err(|e| PyRuntimeError::new_err(format!("data payload not understood: {e}")))?;
@@ -385,14 +427,17 @@ impl ProtocolBinding {
             .map_err(|e| PyRuntimeError::new_err(format!("failed to handle message: {e}")))
     }
 
+    /// Get next data enqueued for sending.
     fn outgoing<'py>(&mut self, py: Python<'py>) -> Option<Bound<'py, PyBytes>> {
         self.0.outgoing().map(|x| PyBytes::new(py, &x))
     }
 
+    /// Enqueue an event for sending.
     fn publish_event(&mut self, topic: &str, event: Event) {
         self.0.publish_event(topic, event.0);
     }
 
+    /// Get the next incoming event.
     fn receive_event(&mut self) -> PyResult<Option<(String, Event)>> {
         Ok(self
             .0

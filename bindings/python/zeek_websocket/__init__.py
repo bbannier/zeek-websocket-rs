@@ -12,6 +12,7 @@ from .zeek_websocket import Event, ProtocolBinding
 __all__ = []
 
 __doc__ = zeek_websocket.__doc__  # type: ignore[name-defined] # noqa: F405
+
 if hasattr(zeek_websocket, "__all__"):  # type: ignore[name-defined] # noqa: F405
     __all__ = zeek_websocket.__all__  # type: ignore[name-defined] # noqa: F405
 

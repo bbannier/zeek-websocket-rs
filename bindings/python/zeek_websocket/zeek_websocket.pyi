@@ -5,6 +5,8 @@ from ipaddress import IPv4Address, IPv6Address
 from typing import Annotated, TypeAlias, TypeVar
 
 class Event:
+    """API representation of Zeek event."""
+
     def __init__(
         self,
         name: str,
@@ -20,8 +22,13 @@ class Event:
         """Deserialize from Zeek WebSocket JSON format."""
         ...
 
+    """Event name."""
     name: str
+
+    """Event arguments."""
     args: list[Value]
+
+    """Event metadata."""
     metadata: list[Value]
 
 _Address: TypeAlias = IPv4Address | IPv6Address | str
@@ -168,8 +175,21 @@ class Protocol(Enum):
     ICMP = 4
 
 class ProtocolBinding:
-    def __init__(self, topics: Sequence[str]) -> None: ...
-    def outgoing(self) -> bytes | None: ...
-    def handle_incoming(self, data: bytes) -> None: ...
-    def publish_event(self, topic: str, event: Event) -> None: ...
-    def receive_event(self) -> tuple[str, Event] | None: ...
+    """Get the next incoming event."""
+
+    def __init__(self, subscriptions: Sequence[str]) -> None: ...
+    def handle_incoming(self, data: bytes) -> None:
+        """Handle received message."""
+        ...
+
+    def outgoing(self) -> bytes | None:
+        """Get next data enqueued for sending."""
+        ...
+
+    def publish_event(self, topic: str, event: Event) -> None:
+        """Enqueue an event for sending."""
+        ...
+
+    def receive_event(self) -> tuple[str, Event] | None:
+        """Get the next incoming event."""
+        ...
