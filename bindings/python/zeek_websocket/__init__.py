@@ -6,20 +6,21 @@ The Zeek-side API wrapped here is
 See the module stub file for documentation for the provided functionality.
 """
 
-from .zeek_websocket import *  # noqa: F403
-from .zeek_websocket import Event, ProtocolBinding
-
-__all__ = []
-
-__doc__ = zeek_websocket.__doc__  # type: ignore[name-defined] # noqa: F405
-
-if hasattr(zeek_websocket, "__all__"):  # type: ignore[name-defined] # noqa: F405
-    __all__ = zeek_websocket.__all__  # type: ignore[name-defined] # noqa: F405
-
-
 from collections.abc import Sequence
 
 import websockets.sync.client
+
+from .zeek_websocket import *  # noqa: F403
+from .zeek_websocket import Event, Protocol, ProtocolBinding, Value, make_value
+
+__all__ = [
+    "Client",
+    "Event",
+    "Protocol",
+    "ProtocolBinding",
+    "Value",
+    "make_value",
+]
 
 
 class Client:
@@ -80,6 +81,3 @@ class Client:
         self._binding.handle_incoming(data)
 
         return self._binding.receive_event()
-
-
-__all__ += ["Client"]
