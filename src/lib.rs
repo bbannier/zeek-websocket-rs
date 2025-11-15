@@ -78,3 +78,7 @@ pub use zeek_websocket_derive::ZeekType;
 #[cfg(feature = "python")]
 #[doc(hidden)]
 pub mod python;
+
+#[cfg(feature = "tokio-client")]
+#[doc(hidden)]
+pub mod test;

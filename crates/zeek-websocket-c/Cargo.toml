@@ -15,5 +15,5 @@ tokio-tungstenite = { workspace = true }
 tungstenite = { workspace = true }
 zeek-websocket = { path = "../..", default-features = false, features = ["tungstenite"] }
 
-[build-dependencies]
-cbindgen = "0.29.2"
+[dev-dependencies]
+zeek-websocket = { path = "../..", default-features = false, features = ["tokio-client"] }

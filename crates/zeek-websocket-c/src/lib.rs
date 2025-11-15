@@ -901,51 +901,14 @@ fn safe_string(s: &str) -> CString {
 #[cfg(test)]
 mod test {
     use std::{
-        ffi::CStr,
-        path::PathBuf,
-        process::{Child, Command, Stdio},
+        ffi::{CStr, CString},
         sync::{Arc, Condvar, LazyLock, Mutex},
-        thread::sleep,
-        time::Duration,
     };
 
     use crate::{Client, ClientError, Event};
 
-    #[derive(Debug)]
-    struct LocalZeek {
-        child: Child,
-    }
-
-    impl LocalZeek {
-        fn new() -> Option<Self> {
-            let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            let manifest_dir = manifest_dir.parent()?.parent()?;
-            let local_zeek = manifest_dir.join("examples").join("local.zeek");
-
-            let child = Command::new(&local_zeek)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .ok()?;
-
-            // Give the Zeek process time to get up.
-            sleep(Duration::from_millis(500));
-
-            Some(Self { child })
-        }
-    }
-
-    impl Drop for LocalZeek {
-        fn drop(&mut self) {
-            let _ = self.child.kill();
-        }
-    }
-
     #[test]
     fn simple_client() {
-        // Start the example server in the background.
-        let _zeek = LocalZeek::new().unwrap();
-
         static EVENTS: LazyLock<Arc<(Mutex<Vec<Event>>, Condvar)>> =
             LazyLock::new(|| Default::default());
 
@@ -962,19 +925,18 @@ mod test {
             dbg!(code, context);
         }
 
-        let app_name = CStr::from_bytes_with_nul(b"myapp\0").unwrap().as_ptr();
+        let zeek = zeek_websocket::test::MockServer::default();
+        let uri = CString::new(zeek.endpoint().to_string()).unwrap();
+
+        let app_name = c"myapp".as_ptr();
 
         let topics: Vec<*const libc::c_char> =
             vec![CStr::from_bytes_with_nul(b"/ping\0").unwrap().as_ptr()];
 
-        let uri = CStr::from_bytes_with_nul(b"ws://localhost:8080/v1/messages/json\0")
-            .unwrap()
-            .as_ptr();
-
         let mut client = unsafe {
             Client::zws_client_new(
                 app_name,
-                uri,
+                uri.as_ptr(),
                 topics.as_ptr(),
                 topics.len(),
                 receive_event_callback,
@@ -983,18 +945,18 @@ mod test {
         }
         .unwrap();
 
-        let event = Box::new(Event(zeek_websocket::Event::new("ping", ["hi!"])));
+        let event = Box::new(Event(zeek_websocket::Event::new("echo", ["hi!"])));
         assert!(unsafe { client.zws_client_publish(topics[0], event) });
 
         let (events, cvar) = &**EVENTS;
 
-        let mut received_pong = false;
+        let mut received_events = false;
         if let Ok(events) = events.try_lock() {
             let xs = cvar.wait(events).unwrap();
-            received_pong |= xs.iter().any(|event| event.0.name == "pong");
+            received_events |= xs.iter().any(|event| event.0.name == "echo");
         }
 
-        assert!(received_pong);
+        assert!(received_events);
     }
 
     #[test]
@@ -1004,9 +966,7 @@ mod test {
         let topics: Vec<*const libc::c_char> =
             vec![CStr::from_bytes_with_nul(b"/ping\0").unwrap().as_ptr()];
 
-        let uri = CStr::from_bytes_with_nul(b"ws://localhost:8080/v1/messages/json\0")
-            .unwrap()
-            .as_ptr();
+        let uri = c"ws://localhost:1".as_ptr();
 
         static COND: LazyLock<Arc<Condvar>> = LazyLock::new(|| Default::default());
 
