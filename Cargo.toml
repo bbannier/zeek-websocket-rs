@@ -10,7 +10,7 @@ rust-version = "1.88"
 default = ["tungstenite", "derive", "tokio-client"]
 
 ## Enables tokio client.
-tokio-client = ["dep:tokio-tungstenite", "dep:futures-util", "dep:typed-builder", "dep:tokio", "tungstenite"]
+tokio-client = ["dep:tokio-tungstenite", "dep:futures-util", "dep:tokio", "tungstenite"]
 
 ## Enables derive macros for converting to and from [`zeek_websocket_types::Value`]
 derive = ["dep:zeek-websocket-derive"]
@@ -32,7 +32,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"], optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
 tungstenite = { workspace = true, optional = true }
-typed-builder = { workspace = true, optional = true }
 zeek-websocket-derive = { workspace = true, optional = true }
 zeek-websocket-types = { workspace = true }
 ordered-float = { workspace = true, optional = true }
@@ -90,6 +89,10 @@ harness = false
 [[example]]
 name = "tokio-tungstenite"
 required-features = ["tungstenite"]
+
+[[example]]
+name = "client"
+required-features = ["tokio-client"]
 
 [lints.clippy]
 pedantic = { level = "deny", priority = -1 }

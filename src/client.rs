@@ -1,273 +1,253 @@
 //! Client implementation
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+//!
+//! # Tokio-based clients for the Zeek WebSocket API
+//!
+//! This module provides a trait [`ZeekClient`] and a [`Service`] which can be used to create full
+//! asynchronous clients for the Zeek WebSocket API under [`tokio`]. Users implement `ZeekClient`
+//! to specify the runtime behavior of the client. After implementing `ZeekClient` for a client
+//! type it needs to be wrapped in a `Service`, e.g.,
+//!
+//! ```
+//! # use zeek_websocket::client::*;
+//! struct Client {
+//!     sender: Option<Outbox>
+//! }
+//!
+//! impl ZeekClient for Client {
+//!     async fn connected(&mut self, _ack: zeek_websocket::Message) {}
+//!     async fn event(&mut self, _topic: String, _event: zeek_websocket::Event) {}
+//!     async fn error(&mut self, _error: zeek_websocket::protocol::ProtocolError) {}
+//! }
+//!
+//! let service = Service::new(|sender| Client {
+//!     sender: Some(sender)
+//! });
+//! ```
+//!
+//! [`Service::new`] passes along an [`Outbox`] which can be used to publish (topic, [`Event`])
+//! tuples to Zeek with [`Outbox::send`]. Clients should store the `Outbox` since after it is
+//! dropped the `Service` will close the connection to Zeek; one way to control the lifetime of the
+//! API connection is to store an `Option<Outbox>` in the client so it can explicitly be reset to
+//! `None`.
+//!
+//! The service needs to explicitly be started with [`Service::serve`] which will return a `Future`
+//! which will become ready once the service has terminated, either due to connection shutdown or a
+//! fatal error.
+//!
+//! ## Example
+//!
+//! This example implements a client which publishes an event to Zeek and waits for the response
+//! before exiting. The hypothetical event here is `echo`,
+//!
+//! ```zeek
+//! global echo: event(message: string);
+//! ```
+//!
+//! and the server will publish back the event on the same topic. Since the client is subscribed on
+//! the topic it publishes to it will see the response, and can then reset its internally held
+//! `Outbox` to signal to the `Service` that the connection should be closed.
+//!
+//! ```
+//! # use zeek_websocket::client::*;
+//! # use zeek_websocket::*;
+//! struct Client {
+//!     sender: Option<Outbox>,
+//! };
+//!
+//! impl ZeekClient for Client {
+//!     async fn connected(&mut self, ack: Message) {
+//!         // Once connected send a single echo event. The server will send
+//!         // the event back to us.
+//!         if let Some(sender) = &self.sender {
+//!             sender
+//!                 .send(("/topic".to_owned(), Event::new("echo", ["hello!"])))
+//!                 .await
+//!                 .unwrap();
+//!         }
+//!     }
+//!
+//!     async fn event(&mut self, topic: String, event: Event) {
+//!         // If we see the `echo` event from the server drop our `sender`.
+//!         // This will cause the service to terminate.
+//!         if &event.name == "echo" {
+//!             self.sender.take();
+//!         }
+//!     }
+//!
+//!     async fn error(&mut self, error: protocol::ProtocolError) {
+//!         todo!()
+//!     }
+//! }
+//!
+//! # let rt = tokio::runtime::Builder::new_multi_thread()
+//! #     .enable_io()
+//! #     .build()
+//! #     .unwrap();
+//! # rt.block_on(async move {
+//! let uri = "ws://localhost:8080/v1/messages/json".try_into().unwrap();
+//! # let uri: tungstenite::http::Uri = uri;
+//! # let zeek = zeek_websocket::test::MockServer::default();
+//! # let uri = zeek.endpoint().clone();
+//!
+//! let service = Service::new(|sender| Client {
+//!     sender: Some(sender),
+//! });
+//!
+//! service
+//!     .serve(
+//!         "my-client",
+//!         uri,
+//!         Subscriptions::from(&["/topic"]),
+//!     )
+//!     .await.unwrap();
+//! # });
+//! ```
 
 use futures_util::{SinkExt, StreamExt};
-use tokio::{
-    sync::{
-        RwLock,
-        mpsc::{Receiver, Sender, channel},
-    },
-    task::JoinHandle,
-};
+use tokio::sync::mpsc::{self};
 use tokio_tungstenite::{
     connect_async,
     tungstenite::{self, http::Uri},
 };
 use tungstenite::ClientRequestBuilder;
-use typed_builder::TypedBuilder;
-use zeek_websocket_types::Event;
+use zeek_websocket_types::{DeserializationError, Event, Message, Subscriptions};
 
 use crate::{
     Binding,
-    protocol::{self, ProtocolError},
+    protocol::{self},
 };
 
-/// Builder to construct a [`Client`].
-#[derive(TypedBuilder)]
-#[builder(
-    doc,
-    build_method(into = Result<Client, Error>),
-    mutators(
-        /// Subscribe to topic to receive events.
-        pub fn subscribe<S: Into<String>>(&mut self, topic: S) {
-            self.subscriptions.insert(topic.into());
-        }
-
-))]
-pub struct ClientConfig {
-    #[builder(via_mutators)]
-    subscriptions: HashSet<String>,
-
-    /// Zeek WebSocket endpoint to connect to.
-    endpoint: Uri,
-
-    /// String use by the client to identify itself against Zeek.
-    #[builder(setter(into))]
-    app_name: String,
-
-    /// How many events to buffer before exerting backpressure.
-    #[builder(default = 1024)]
-    buffer_capacity: usize,
+pub struct Service<S> {
+    client: S,
+    rx: mpsc::Receiver<(String, Event)>,
 }
 
-impl From<ClientConfig> for Result<Client, Error> {
-    fn from(
-        ClientConfig {
-            subscriptions,
-            endpoint,
-            buffer_capacity,
-            app_name,
-        }: ClientConfig,
-    ) -> Self {
-        let (events_sender, events) = channel(buffer_capacity);
+pub type Outbox = mpsc::Sender<(String, Event)>;
 
-        let bindings: Result<_, _> = subscriptions
-            .into_iter()
-            .map(|topic| {
-                let client = TopicHandler::new(
-                    app_name.clone(),
-                    Some(topic.clone()),
-                    endpoint.clone(),
-                    events_sender.clone(),
-                );
-                Ok::<(Option<String>, TopicHandler), Error>((Some(topic), client))
-            })
-            .collect();
-        let bindings = Arc::new(RwLock::<HashMap<_, _>>::new(bindings?));
+impl<C: ZeekClient> Service<C> {
+    pub fn new<F>(init: F) -> Self
+    where
+        F: FnOnce(Outbox) -> C,
+    {
+        // We give the client a channel of size `1` for publishing. This prevents the client from
+        // overwhelming the service loop with too much data. We could probably also pick a slightly
+        // bigger number for less backpressure.
+        const CHANNEL_SIZE: usize = 1;
 
-        Ok(Client {
-            app_name,
-            endpoint,
-            bindings,
-            events,
-            events_sender,
-        })
-    }
-}
-
-/// # Tokio-based for the Zeek WebSocket API
-///
-/// [`Client`] implements an async client for the Zeek WebSocket API. It is intended to be run
-/// inside a `tokio` runtime. The general workflow is to build a client with the [`ClientConfig`]
-/// builder interface, and then either publish or receive events.
-///
-/// ## Example
-///
-/// ```no_run
-/// use anyhow::Result;
-/// use zeek_websocket::client::ClientConfig;
-/// use zeek_websocket::Event;
-///
-/// #[tokio::main]
-/// async fn main() -> Result<()> {
-///     let mut client = ClientConfig::builder()
-///         .app_name("my_client_application")
-///         .subscribe("/info")
-///         .endpoint("ws://127.0.0.1:8080/v1/messages/json".try_into()?)
-///         .build()?;
-///
-///     client
-///         .publish_event("/ping", Event::new("ping", vec!["abc"]))
-///         .await;
-///
-///     loop {
-///         // Client automatically receives events on topics it sent to.
-///         if let Some((_topic, event)) = client.receive_event().await? {
-///             eprintln!("{event:?}");
-///             break;
-///         }
-///     }
-///
-///     Ok(())
-/// }
-/// ```
-pub struct Client {
-    app_name: String,
-
-    endpoint: Uri,
-    bindings: Arc<RwLock<HashMap<Option<String>, TopicHandler>>>,
-
-    events: Receiver<Result<(String, Event), ProtocolError>>,
-    events_sender: Sender<Result<(String, Event), ProtocolError>>,
-}
-
-impl Client {
-    /// Publish an [`Event`] to `topic`.
-    pub async fn publish_event<S: Into<String>>(&mut self, topic: S, event: Event) {
-        let topic = topic.into();
-
-        let mut bindings = self.bindings.write().await;
-
-        let client = if let Some(client) = bindings.get(&Some(topic.clone())) {
-            // If we are subscribed to a topic use its handler for publishing the event.
-            client
-        } else {
-            // Else use a null handler which does not receive events, but can still publish.
-            bindings.entry(None).or_insert_with(|| {
-                TopicHandler::new(
-                    self.app_name.clone(),
-                    None,
-                    self.endpoint.clone(),
-                    self.events_sender.clone(),
-                )
-            })
-        };
-
-        let _ = client.publish_sink.send((topic.clone(), event)).await;
+        let (tx, rx) = mpsc::channel(CHANNEL_SIZE);
+        let client = init(tx);
+        Self { client, rx }
     }
 
-    /// Receive the next [`Event`] or [`Error`].
+    /// Run the client against the server until either
     ///
-    /// If an event was received it will be returned as `Ok(Some((topic, event)))`.
+    /// - the client drops its event sender, or
+    /// - we encounter a fatal error.
     ///
     /// # Errors
     ///
-    /// Might return a [`ProtocolError`] from the underlying binding, e.g., Zeek, or an
-    /// transport-related error.
-    pub async fn receive_event(&mut self) -> Result<Option<(String, Event)>, Error> {
-        Ok(self.events.recv().await.transpose()?)
-    }
-
-    /// Subscribe to a topic.
+    /// We return errors for
     ///
-    /// This is a noop if the client is already subscribed.
-    pub async fn subscribe<S: Into<String>>(&mut self, topic: S) {
-        let topic = topic.into();
+    /// - transport-related issues which are not recoverable
+    /// - errors to deserialize messages
+    pub async fn serve<S, T>(mut self, app_name: S, uri: Uri, subscriptions: T) -> Result<(), Error>
+    where
+        S: Into<String>,
+        T: Into<Subscriptions>,
+    {
+        let request = ClientRequestBuilder::new(uri).with_header("X-Application-Name", app_name);
 
-        let mut bindings = self.bindings.write().await;
-        bindings.entry(Some(topic.clone())).or_insert_with(|| {
-            TopicHandler::new(
-                self.app_name.clone(),
-                Some(topic),
-                self.endpoint.clone(),
-                self.events_sender.clone(),
-            )
-        });
-    }
+        let (mut stream, ..) = connect_async(request)
+            .await
+            .map_err(|e| Error::Transport(e.to_string()))?;
 
-    /// Unsubscribe from a topic.
-    ///
-    /// This is a noop if the client was not subscribed.
-    pub async fn unsubscribe(&mut self, topic: &str) -> bool {
-        let mut bindings = self.bindings.write().await;
-        bindings.remove(&Some(topic.to_string())).is_some()
-    }
-}
+        let mut binding = Binding::new(subscriptions);
 
-struct TopicHandler {
-    _loop: JoinHandle<Result<(), Error>>,
-    publish_sink: Sender<(String, Event)>,
-}
+        // Handle subscription.
+        while let Some(x) = binding.outgoing() {
+            stream.send(x.into()).await?;
+        }
 
-impl TopicHandler {
-    fn new(
-        app_name: String,
-        topic: Option<String>,
-        endpoint: Uri,
-        events_sender: Sender<Result<(String, Event), ProtocolError>>,
-    ) -> Self {
-        let (publish_sink, mut publish) = channel(1);
-
-        let loop_ = tokio::spawn(async move {
-            let topics = if let Some(topic) = &topic {
-                vec![topic.clone()]
-            } else {
-                vec![]
+        let ack = loop {
+            let Some(ack) = stream.next().await else {
+                // The server closed the connection.
+                return Ok(());
             };
-            let mut binding = Binding::new(topics);
 
-            let endpoint =
-                ClientRequestBuilder::new(endpoint).with_header("X-Application-Name", app_name);
+            let ack = ack.map_err(|e| Error::Transport(e.to_string()))?;
+            if ack.is_ping() {
+                continue;
+            }
+            break ack;
+        };
+        self.client.connected(ack.try_into()?).await;
 
-            let (mut stream, ..) = connect_async(endpoint).await?;
+        loop {
+            tokio::select! {
+                s = self.rx.recv() => {
+                    let Some((topic, event)) = s else {
+                        // Sender closed, graceful exit.
+                        break;
+                    };
 
-            loop {
-                tokio::select! {
-                    r = publish.recv() => {
-                        let Some((topic, event)) = r else { return Ok(()); };
-                        binding.publish_event::<String>(topic, event);
+                    binding.publish_event(topic, event);
+
+                    while let Some(x) = binding.outgoing() {
+                        stream.send(x.into()).await?;
                     }
-                    s = stream.next() => {
-                        if let Ok(message) = match s {
-                            Some(payload) => match payload {
-                                Ok(p) => p.try_into(),
-                                Err(e) => {
-                                    if let Some(topic) = &topic {
-                                        handle_transport_error(e, &mut binding, topic)?;
-                                    }
-                                    continue;
-                                },
-                            },
+                }
 
-                            None => continue,
-                        } {
-                            binding.handle_incoming(message)?;
+                r = stream.next() => {
+                    let Some(r) = r else {
+                        // Connection closed, graceful exit.
+                        break;
+                    };
+
+                    let r = r.map_err(|e| Error::Transport(e.to_string()))?;
+                    if r.is_ping() {
+                        continue;
+                    }
+
+                    let m: Message = match r.try_into() {
+                        Ok(m) => m,
+                        Err(e) => {
+                            self.client.error(e.into()).await;
+                            continue;
+                        }
+                    };
+
+                    binding.handle_incoming(m)?;
+
+                    while let Some(received) = binding.receive_event().transpose() {
+                        match received {
+                            Ok((topic, event)) => self.client.event(topic, event).await,
+                            Err(e) => self.client.error(e).await,
                         }
                     }
-                };
-
-                while let Some(bin) = binding.outgoing() {
-                    if let Err(e) = stream.send(tungstenite::Message::binary(bin)).await
-                        && let Some(topic) = &topic
-                    {
-                        handle_transport_error(e, &mut binding, topic)?;
-                    }
-                }
-
-                while let Some(payload) = binding.receive_event().transpose() {
-                    let _ = events_sender.send(payload).await;
                 }
             }
-        });
-
-        TopicHandler {
-            _loop: loop_,
-            publish_sink,
         }
+
+        Ok(())
     }
+}
+
+pub trait ZeekClient {
+    /// Callback invoked when we have finished the handshake with the server.
+    fn connected(&mut self, ack: Message) -> impl std::future::Future<Output = ()> + Send;
+
+    /// Callback invoked when an event is received.
+    fn event(
+        &mut self,
+        topic: String,
+        event: Event,
+    ) -> impl std::future::Future<Output = ()> + Send;
+
+    /// Callback invoked when an error is received.
+    fn error(
+        &mut self,
+        error: protocol::ProtocolError,
+    ) -> impl std::future::Future<Output = ()> + Send;
 }
 
 /// Error enum for client-related errors.
@@ -285,88 +265,99 @@ impl From<tungstenite::Error> for Error {
     }
 }
 
-/// Error handling for transport errors.
-///
-/// Returns a `Ok(())` if the incoming could be handled, or an `Err` if it should be propagated up.
-fn handle_transport_error(
-    e: tungstenite::Error,
-    binding: &mut Binding,
-    topic: &str,
-) -> Result<(), Error> {
-    match e {
-        // Errors we can handle by gracefully resubscribing.
-        tungstenite::Error::AttackAttempt
-        | tungstenite::Error::AlreadyClosed
-        | tungstenite::Error::ConnectionClosed
-        | tungstenite::Error::Io(_) => {
-            *binding = Binding::new(vec![topic]);
-            Ok(())
-        }
-
-        // Errors we bail on and bubble up to the user.
-        tungstenite::Error::Protocol(_)
-        | tungstenite::Error::WriteBufferFull(_)
-        | tungstenite::Error::Capacity(_)
-        | tungstenite::Error::Tls(_)
-        | tungstenite::Error::Url(_)
-        | tungstenite::Error::Http(_)
-        | tungstenite::Error::HttpFormat(_)
-        | tungstenite::Error::Utf8(_) => Err(Error::from(e)),
+impl From<DeserializationError> for Error {
+    fn from(value: DeserializationError) -> Self {
+        Self::ProtocolError(value.into())
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
+    use tokio::sync::mpsc::{self};
+    use zeek_websocket_types::{Event, Message, Subscriptions};
 
-    use zeek_websocket_types::Event;
-
-    use crate::{client::ClientConfig, test::MockServer};
+    use crate::{
+        client::{Error, Service, ZeekClient},
+        protocol::ProtocolError,
+        test::MockServer,
+    };
 
     #[tokio::test]
-    async fn basic() {
-        let endpoint = "ws://127.0.0.1";
-        let mut client = ClientConfig::builder()
-            .endpoint(endpoint.try_into().unwrap())
-            .app_name("foo")
-            .subscribe("/info")
-            .build()
-            .unwrap();
+    async fn unreachable_remote() {
+        struct Client {
+            _sender: mpsc::Sender<(String, Event)>,
+        }
 
-        client
-            .publish_event("/info", Event::new("info", ["hi!"]))
+        impl ZeekClient for Client {
+            async fn connected(&mut self, _ack: Message) {}
+            async fn event(&mut self, _topic: String, _event: Event) {}
+            async fn error(&mut self, _error: ProtocolError) {}
+        }
+
+        let service = Service::new(|_sender| Client { _sender });
+
+        let status = service
+            .serve(
+                "foo",
+                "ws://localhost:1".try_into().unwrap(),
+                Subscriptions::default(),
+            )
             .await;
-
-        client
-            .publish_event("/not-yet-subscribed", Event::new("info", ["hi!"]))
-            .await;
-
-        tokio::select! {
-            _e = client.receive_event() => {}
-            _timeout = tokio::time::sleep(Duration::from_millis(10)) => {}
-        };
-
-        client.subscribe("/info").await;
-        client.subscribe("/foo").await;
-
-        client.unsubscribe("/info").await;
-        client.unsubscribe("/foo").await;
+        assert!(matches!(status, Err(Error::Transport(_))), "{status:?}");
     }
 
     #[tokio::test]
-    async fn publish_receive() {
-        let mock = MockServer::default();
+    async fn echo() {
+        static TOPIC: &str = "/topic";
 
-        let topic = "/foo".to_owned();
-        let mut client = ClientConfig::builder()
-            .endpoint(mock.endpoint().try_into().unwrap())
-            .app_name(&topic)
-            .subscribe("/foo")
-            .build()
-            .unwrap();
+        struct C {
+            _sender: mpsc::Sender<(String, Event)>,
+            seen_events: mpsc::Sender<(String, Event)>,
+        }
 
-        let echo = Event::new("echo", ["hi"]);
-        client.publish_event(&topic, echo.clone()).await;
-        assert_eq!(client.receive_event().await, Ok(Some((topic, echo))));
+        impl C {
+            fn new(
+                sender: mpsc::Sender<(String, Event)>,
+                seen_events: mpsc::Sender<(String, Event)>,
+            ) -> Self {
+                Self {
+                    seen_events,
+                    _sender: sender,
+                }
+            }
+        }
+
+        impl ZeekClient for C {
+            async fn connected(&mut self, _ack: Message) {
+                self._sender
+                    .send((TOPIC.into(), Event::new("echo", [42])))
+                    .await
+                    .unwrap();
+            }
+
+            async fn event(&mut self, topic: String, event: Event) {
+                eprintln!("Event {topic:?}: {event:?}");
+                self.seen_events.send((topic, event)).await.unwrap();
+            }
+
+            async fn error(&mut self, error: ProtocolError) {
+                eprintln!("Error: {error:?}");
+            }
+        }
+
+        let zeek = MockServer::default();
+
+        let (seen, mut events) = mpsc::channel(1);
+
+        let service = Service::new(|sender| C::new(sender, seen));
+
+        tokio::select! {
+            Some((topic, event)) = events.recv() => {
+                eprintln!("Event {topic:?}: {event:?}");
+            }
+            s = service.serve("foo", zeek.endpoint().clone(), Subscriptions::from(&[TOPIC])) => {
+                unreachable!("We should have received an event but instead the service returned with {s:?}");
+            }
+        }
     }
 }

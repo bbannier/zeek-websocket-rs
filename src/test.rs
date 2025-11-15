@@ -1,5 +1,6 @@
 use futures_util::{SinkExt, StreamExt};
 use std::{collections::HashSet, thread::JoinHandle};
+use tungstenite::http::Uri;
 use zeek_websocket_types::Subscriptions;
 
 use tokio::net::TcpListener;
@@ -9,7 +10,7 @@ use tokio::net::TcpListener;
 /// The only supported event is `echo` which simply sends back all received data if the client was subscribed to the topic.
 pub struct MockServer {
     _handle: JoinHandle<()>,
-    endpoint: String,
+    endpoint: Uri,
 }
 
 impl Default for MockServer {
@@ -84,7 +85,9 @@ impl Default for MockServer {
         });
 
         let addr = rx.recv().expect("could not get addr");
-        let endpoint = format!("ws://{addr:?}");
+        let endpoint = format!("ws://{addr:?}")
+            .try_into()
+            .expect("uri should be valid");
 
         Self {
             _handle: handle,
@@ -95,7 +98,7 @@ impl Default for MockServer {
 
 impl MockServer {
     #[must_use]
-    pub fn endpoint(&self) -> &str {
+    pub fn endpoint(&self) -> &Uri {
         &self.endpoint
     }
 }

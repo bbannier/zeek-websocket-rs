@@ -49,7 +49,7 @@ use std::collections::VecDeque;
 
 use thiserror::Error;
 use tungstenite::Bytes;
-use zeek_websocket_types::{Data, Event, Message, Value};
+use zeek_websocket_types::{Data, DeserializationError, Event, Message, Value};
 
 use crate::types::Subscriptions;
 
@@ -89,9 +89,6 @@ impl Binding {
     }
 
     /// Handle received message.
-    ///
-    /// Returns `true` if the data was converted to a [`Message`] and added
-    /// to the inbox, or `false` otherwise.
     ///
     /// # Errors
     ///
@@ -242,7 +239,9 @@ impl Outbox {
 /// Error enum for protocol-related errors.
 #[derive(Error, Debug, PartialEq)]
 pub enum ProtocolError {
-    /// received an ACK while already subscribed
+    #[error("received an ACK while already subscribed")]
+    AckExpected,
+
     #[error("received an ACK while already subscribed")]
     AlreadySubscribed,
 
@@ -251,6 +250,9 @@ pub enum ProtocolError {
 
     #[error("unexpected event payload received")]
     UnexpectedEventPayload(Value),
+
+    #[error("could not deserialize message: {0}")]
+    DeserializationError(#[from] DeserializationError),
 }
 
 #[cfg(test)]

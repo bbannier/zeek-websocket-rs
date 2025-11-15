@@ -468,8 +468,8 @@ impl From<Message> for tungstenite::Message {
 /// Error enum for Zeek-related deserialization errors.
 #[derive(Error, Debug, PartialEq)]
 pub enum DeserializationError {
-    #[error("unexpected message type")]
-    UnexpectedMessageType,
+    #[error("unexpected message type: {0}")]
+    UnexpectedMessageType(tungstenite::Message),
 
     #[error("could not parse message JSON: {0}")]
     Json(String),
@@ -485,7 +485,7 @@ impl TryFrom<tungstenite::Message> for Message {
         let msg = match value {
             tungstenite::Message::Text(txt) => serde_json::from_str(&txt),
             tungstenite::Message::Binary(bin) => serde_json::from_slice(&bin),
-            _ => return Err(DeserializationError::UnexpectedMessageType),
+            x => return Err(DeserializationError::UnexpectedMessageType(x)),
         }
         .map_err(|e| DeserializationError::Json(e.to_string()))?;
 
@@ -649,7 +649,7 @@ impl TryFrom<tungstenite::Message> for Subscriptions {
         let msg = match value {
             tungstenite::Message::Text(txt) => serde_json::from_str(&txt),
             tungstenite::Message::Binary(bin) => serde_json::from_slice(&bin),
-            _ => return Err(DeserializationError::UnexpectedMessageType),
+            x => return Err(DeserializationError::UnexpectedMessageType(x)),
         }
         .map_err(|e| DeserializationError::Json(e.to_string()))?;
 
@@ -749,9 +749,10 @@ mod test {
 
         assert_eq!(event, event2);
 
+        let ping = tungstenite::Message::Ping(Bytes::new());
         assert_eq!(
-            Message::try_from(tungstenite::Message::Ping(Bytes::new())),
-            Err(DeserializationError::UnexpectedMessageType)
+            Message::try_from(ping.clone()),
+            Err(DeserializationError::UnexpectedMessageType(ping))
         );
     }
 
