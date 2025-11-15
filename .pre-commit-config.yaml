@@ -4,8 +4,9 @@ repos:
     hooks:
       - id: fmt
       - id: clippy
-        args: ["--all", "--all-features"]
+        args: ["--all", "--all-features", "--workspace"]
       - id: cargo-check
+        args: ["--all", "--all-features", "--workspace"]
   - repo: https://github.com/jorisroovers/gitlint
     rev: v0.19.1
     hooks:
