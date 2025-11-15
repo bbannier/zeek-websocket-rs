@@ -1102,9 +1102,9 @@ mod test {
         assert_eq!(serde_json::from_value::<Value>(json).unwrap(), value);
 
         assert_eq!(
-            dbg!(serde_json::from_value::<Value>(
+            serde_json::from_value::<Value>(
                 json!({"@data-type": "timestamp", "data":"2014-99-99T01:02:03.000000004"}),
-            ))
+            )
             .err()
             .unwrap()
             .to_string(),

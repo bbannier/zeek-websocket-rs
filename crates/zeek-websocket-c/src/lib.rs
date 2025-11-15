@@ -914,7 +914,7 @@ mod test {
 
         extern "C" fn receive_event_callback(topic: *const libc::c_char, event: &Event) {
             let topic = unsafe { CStr::from_ptr(topic) };
-            dbg!(topic, &event.0);
+            eprintln!("Event {topic:?}: {:?}", &event.0);
 
             EVENTS.0.lock().unwrap().push(Event(event.0.clone()));
             EVENTS.1.notify_one();
@@ -922,7 +922,7 @@ mod test {
 
         extern "C" fn receive_error_callback(code: ClientError, context: *const libc::c_char) {
             let context = unsafe { CStr::from_ptr(context) };
-            dbg!(code, context);
+            eprintln!("Error {code:?}: {context:?}");
         }
 
         let zeek = zeek_websocket::test::MockServer::default();
@@ -974,7 +974,7 @@ mod test {
 
         extern "C" fn receive_error_callback(code: ClientError, context: *const libc::c_char) {
             let context = unsafe { CStr::from_ptr(context) };
-            dbg!(code, context);
+            eprintln!("Error {code:?} {context:?}");
 
             COND.notify_one();
         }
