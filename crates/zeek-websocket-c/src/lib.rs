@@ -363,37 +363,37 @@ macro_rules! getter {
 }
 
 impl Value {
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_new_none() -> Box<Self> {
         Box::new(Self(zeek_websocket::Value::None))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_new_boolean(data: bool) -> Box<Self> {
         Box::new(Self(zeek_websocket::Value::Boolean(data)))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_new_count(data: u64) -> Box<Self> {
         Box::new(Self(zeek_websocket::Value::Count(data)))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_new_integer(data: i64) -> Box<Self> {
         Box::new(Self(zeek_websocket::Value::Integer(data)))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_new_real(data: f64) -> Box<Self> {
         Box::new(Self(zeek_websocket::Value::Real(data)))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_new_timespan(nanos: i64) -> Box<Self> {
         Box::new(Self(zeek_websocket::Value::Timespan(
@@ -401,7 +401,7 @@ impl Value {
         )))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_new_timestamp(nanos_utc: i64) -> Box<Self> {
         Box::new(Self(zeek_websocket::Value::Timestamp(
@@ -409,7 +409,7 @@ impl Value {
         )))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     ///
     /// # Safety
     ///
@@ -423,7 +423,7 @@ impl Value {
         ))))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     ///
     /// # Safety
     ///
@@ -436,7 +436,7 @@ impl Value {
         ))))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     ///
     /// `data` ownership is passed to function.
     #[unsafe(no_mangle)]
@@ -444,7 +444,7 @@ impl Value {
         Box::new(Self(zeek_websocket::Value::Address(data.0)))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     ///
     /// `addr` ownership is passed to function.
     #[unsafe(no_mangle)]
@@ -454,13 +454,13 @@ impl Value {
         ))))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_new_port(port: Port) -> Box<Self> {
         Box::new(Self(zeek_websocket::Value::Port(port.into())))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     ///
     /// # Safety
     ///
@@ -476,7 +476,7 @@ impl Value {
         Box::new(Self(zeek_websocket::Value::Vector(xs)))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     ///
     /// # Safety
     ///
@@ -492,7 +492,7 @@ impl Value {
         Box::new(Self(zeek_websocket::Value::Set(xs)))
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_value_free`.
     ///
     /// # Safety
     ///
@@ -516,6 +516,9 @@ impl Value {
             .collect();
         Box::new(Self(zeek_websocket::Value::Table(xs)))
     }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn zws_value_free(self: Box<Self>) {}
 
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_type(&self) -> ValueType {
@@ -581,7 +584,7 @@ impl Value {
         }
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_address_free`.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_as_address(&self) -> Option<Box<Address>> {
         if let zeek_websocket::Value::Address(addr) = &self.0 {
@@ -591,7 +594,7 @@ impl Value {
         }
     }
 
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_subnet_free`.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_as_subnet(&self) -> Option<Box<Subnet>> {
         if let zeek_websocket::Value::Subnet(subnet) = &self.0 {
@@ -776,13 +779,16 @@ impl From<u128> for U128 {
 pub struct Address(pub(crate) IpAddr);
 
 impl Address {
-    /// Returned value must be freed by caller.
+    /// Returned value must be freed by caller with `zws_address_free`.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_address_new_v4(data: u32) -> Box<Self> {
         Box::new(Self(IpAddr::V4(Ipv4Addr::from_bits(data))))
     }
 
-    /// Returned value must be freed by caller.
+    #[unsafe(no_mangle)]
+    pub extern "C" fn zws_address_free(self: Box<Address>) {}
+
+    /// Returned value must be freed by caller with `zws_address_free`.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_address_new_v6(data: &U128) -> Box<Self> {
         Box::new(Self(IpAddr::V6(Ipv6Addr::from_bits(data.into()))))
@@ -825,6 +831,11 @@ pub enum AddressType {
 pub struct Subnet {
     pub(crate) addr: Box<Address>,
     pub(crate) prefix: u8,
+}
+
+impl Subnet {
+    #[unsafe(no_mangle)]
+    pub extern "C" fn zws_subnet_free(self: Box<Self>) {}
 }
 
 #[repr(C)]
