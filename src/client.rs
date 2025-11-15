@@ -321,7 +321,7 @@ mod test {
 
     use zeek_websocket_types::Event;
 
-    use crate::client::ClientConfig;
+    use crate::{client::ClientConfig, test::MockServer};
 
     #[tokio::test]
     async fn basic() {
@@ -351,5 +351,22 @@ mod test {
 
         client.unsubscribe("/info").await;
         client.unsubscribe("/foo").await;
+    }
+
+    #[tokio::test]
+    async fn publish_receive() {
+        let mock = MockServer::default();
+
+        let topic = "/foo".to_owned();
+        let mut client = ClientConfig::builder()
+            .endpoint(mock.endpoint().try_into().unwrap())
+            .app_name(&topic)
+            .subscribe("/foo")
+            .build()
+            .unwrap();
+
+        let echo = Event::new("echo", ["hi"]);
+        client.publish_event(&topic, echo.clone()).await;
+        assert_eq!(client.receive_event().await, Ok(Some((topic, echo))));
     }
 }
