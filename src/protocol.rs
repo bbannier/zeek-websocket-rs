@@ -360,7 +360,7 @@ mod test {
 
     #[test]
     fn next_incoming() {
-        let mut conn = Binding::new(Subscriptions(Vec::new()));
+        let mut conn = Binding::new(Subscriptions::default());
 
         // Put an ACK and an event into the inbox.
         let _ = conn.handle_incoming(ack());
