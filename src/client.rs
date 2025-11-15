@@ -255,6 +255,7 @@ pub trait ZeekClient {
 pub enum Error {
     #[error("failure in websocket transport: {0}")]
     Transport(String),
+
     #[error("protocol-related error: {0}")]
     ProtocolError(#[from] protocol::ProtocolError),
 }

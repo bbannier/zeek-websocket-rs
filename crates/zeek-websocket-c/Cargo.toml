@@ -13,7 +13,4 @@ libc = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
 tokio-tungstenite = { workspace = true }
 tungstenite = { workspace = true }
-zeek-websocket = { path = "../..", default-features = false, features = ["tungstenite"] }
-
-[dev-dependencies]
 zeek-websocket = { path = "../..", default-features = false, features = ["tokio-client"] }

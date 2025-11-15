@@ -1,22 +1,21 @@
-use futures_util::{SinkExt, StreamExt};
-use tokio::{
-    runtime::Runtime,
-    sync::mpsc::{UnboundedSender, error::SendError},
-};
-use tokio_tungstenite::{WebSocketStream, connect_async};
-use tungstenite::client::ClientRequestBuilder;
-
 use std::{
     ffi::{CStr, CString},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     ptr, slice,
     time::Duration,
 };
-use zeek_websocket::{Binding, IpNetwork};
+
+use tokio::{runtime::Runtime, sync::mpsc::error::SendError, task::JoinHandle};
+use zeek_websocket::{
+    IpNetwork,
+    client::{self, Outbox, ZeekClient},
+    protocol::ProtocolError,
+};
 
 pub struct Client {
     rt: Runtime,
-    outgoing: UnboundedSender<(String, zeek_websocket::Event)>,
+    _service: JoinHandle<()>,
+    publish: Option<Outbox>,
 }
 
 impl Client {
@@ -90,122 +89,59 @@ impl Client {
             }
         };
 
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(String, _)>();
+        struct Inner {
+            receive_callback: ClientReceiveCallback,
+            error_callback: ClientErrorCallback,
+        }
 
-        let mut binding = Binding::new(subscriptions);
-
-        let handle_send = async |topic: &str,
-                                 event: zeek_websocket::Event,
-                                 binding: &mut Binding,
-                                 stream: &mut WebSocketStream<_>,
-                                 error_callback: ClientErrorCallback| {
-            binding.publish_event(topic, event);
-
-            let mut sent = false;
-            while let Some(out) = binding.outgoing() {
-                if let Err(e) = stream.feed(out.into()).await {
-                    let error = safe_string(&e.to_string());
-                    error_callback(ClientError::Transport, error.as_ptr());
-                    return Err(());
-                }
-                sent = true;
-            }
-            if sent && let Err(e) = stream.flush().await {
-                let error = safe_string(&e.to_string());
-                error_callback(ClientError::Transport, error.as_ptr());
-                return Err(());
-            }
-
-            Ok(())
-        };
-
-        let handle_recv = async |s: Option<Result<tungstenite::Message, _>>,
-                                 binding: &mut Binding,
-                                 receive_callback: ClientReceiveCallback,
-                                 error_callback: ClientErrorCallback| {
-            let received = match s {
-                Some(m) => m,
-                None => return Err(()),
-            };
-
-            let message = match received {
-                Ok(m) => m,
-                Err(e) => {
-                    let e: tungstenite::Error = e;
-                    let error = safe_string(&e.to_string());
-                    error_callback(ClientError::Zeek, error.as_ptr());
-
-                    // Continue processing after receiving errors from Zeek.
-                    return Ok(());
-                }
-            };
-
-            let Ok(message) = message.try_into() else {
-                // Ignore unexpected messages.
-                return Ok(());
-            };
-
-            if let Err(e) = binding.handle_incoming(message) {
-                let error = safe_string(&e.to_string());
-                error_callback(ClientError::InvalidEventPayload, error.as_ptr());
-
-                return Ok(());
-            }
-
-            loop {
-                let received = match binding.receive_event() {
-                    Ok(r) => r,
-                    Err(e) => {
-                        error_callback(ClientError::Zeek, safe_string(&e.to_string()).as_ptr());
-                        continue;
-                    }
-                };
-
-                let Some((topic, event)) = received else {
-                    break;
-                };
-
+        impl ZeekClient for Inner {
+            async fn event(&mut self, topic: String, event: zeek_websocket::Event) {
                 let topic = safe_string(&topic);
-                receive_callback(topic.as_ptr(), &Event(event));
+                (self.receive_callback)(topic.as_ptr(), &Event(event));
             }
 
-            Ok(())
-        };
+            async fn error(&mut self, error: ProtocolError) {
+                let code = (&error).into();
+                let context = safe_string(&error.to_string());
+                (self.error_callback)(code, context.as_ptr());
+            }
 
-        let request =
-            ClientRequestBuilder::new(endpoint).with_header("X-Application-Name", app_name);
+            async fn connected(&mut self, _ack: zeek_websocket::Message) {
+                // Nothing.
+            }
+        }
 
-        rt.spawn(async move {
-            let mut stream = match connect_async(request).await {
-                Ok((stream, ..)) => stream,
-                Err(e) => {
-                    let error = safe_string(&e.to_string());
-                    error_callback(ClientError::Transport, error.as_ptr());
-                    return;
+        let mut publish = None;
+
+        let service = client::Service::new(|sender| {
+            publish = Some(sender);
+            Inner {
+                receive_callback,
+                error_callback,
+            }
+        });
+
+        let service = rt.spawn(async move {
+            match service.serve(app_name, endpoint, subscriptions).await {
+                Ok(_) => {
+                    // Nothing.
                 }
-            };
-
-            loop {
-                tokio::select! {
-                    outgoing = rx.recv() => {
-                        let Some((topic, event)) = outgoing else {
-                            return;
-                        };
-
-                        if handle_send(topic.as_str(), event, &mut binding, &mut stream, error_callback).await.is_err() {
-                            return;
-                        }
-                    }
-                    s = stream.next() => {
-                        if handle_recv(s, &mut binding, receive_callback, error_callback).await.is_err() {
-                            return;
-                        }
-                    }
+                Err(error) => {
+                    let code = match &error {
+                        client::Error::Transport(_) => ClientError::Transport,
+                        client::Error::ProtocolError(e) => e.into(),
+                    };
+                    let context = safe_string(&error.to_string());
+                    error_callback(code, context.as_ptr());
                 }
             }
         });
 
-        Some(Box::new(Self { outgoing: tx, rt }))
+        Some(Box::new(Self {
+            rt,
+            _service: service,
+            publish,
+        }))
     }
 
     #[unsafe(no_mangle)]
@@ -215,8 +151,7 @@ impl Client {
     ///
     /// The function takes ownership of `event`.
     ///
-    /// Either returns `true` on success, or `false` in case of error and also called the error
-    /// callback of the client.
+    /// Either returns `true` on success, or `false` if the client is not connected.
     ///
     /// # Safety
     ///
@@ -235,7 +170,12 @@ impl Client {
             return false;
         };
 
-        match self.outgoing.send((topic.to_owned(), event.0)) {
+        let publish = match &self.publish {
+            Some(publish) => publish,
+            None => return false,
+        };
+
+        match self.rt.block_on(publish.send((topic.to_owned(), event.0))) {
             Ok(()) => true,
             Err(SendError(_)) => {
                 // No need to invoke the error handler as the receiving side would only be closed
@@ -280,13 +220,25 @@ pub enum ClientError {
     InvalidUri,
     /// Invalid topic.
     InvalidTopic,
-    /// Invalid event payload received.
-    InvalidEventPayload,
+    /// Unexpected message received.
+    UnexpectedMessage,
     /// Transport-related error. When encountered the client needs to be recreated.
     Transport,
     /// Error received from Zeek, e.g., due to type or signature mismatches or other Zeek
     /// conditions.
     Zeek,
+}
+
+impl From<&ProtocolError> for ClientError {
+    fn from(value: &ProtocolError) -> Self {
+        match value {
+            ProtocolError::ZeekError { .. } => ClientError::Zeek,
+            ProtocolError::AckExpected
+            | ProtocolError::DeserializationError(..)
+            | ProtocolError::UnexpectedEventPayload(..) => ClientError::UnexpectedMessage,
+            ProtocolError::AlreadySubscribed => ClientError::Transport,
+        }
+    }
 }
 
 pub struct Event(zeek_websocket::Event);
@@ -930,8 +882,7 @@ mod test {
 
         let app_name = c"myapp".as_ptr();
 
-        let topics: Vec<*const libc::c_char> =
-            vec![CStr::from_bytes_with_nul(b"/ping\0").unwrap().as_ptr()];
+        let topics: Vec<*const libc::c_char> = vec![c"/ping".as_ptr()];
 
         let mut client = unsafe {
             Client::zws_client_new(
@@ -963,8 +914,7 @@ mod test {
     fn unreachable_remote() {
         let app_name = CStr::from_bytes_with_nul(b"myapp\0").unwrap().as_ptr();
 
-        let topics: Vec<*const libc::c_char> =
-            vec![CStr::from_bytes_with_nul(b"/ping\0").unwrap().as_ptr()];
+        let topics: Vec<_> = vec![c"/ping".as_ptr()];
 
         let uri = c"ws://localhost:1".as_ptr();
 
@@ -979,7 +929,7 @@ mod test {
             COND.notify_one();
         }
 
-        let _client = unsafe {
+        let mut client = unsafe {
             Client::zws_client_new(
                 app_name,
                 uri,
@@ -990,6 +940,13 @@ mod test {
             )
         }
         .unwrap();
+
+        assert!(unsafe {
+            client.zws_client_publish(
+                topics[0],
+                Box::new(Event(zeek_websocket::Event::new("echo", [1]))),
+            )
+        });
 
         let mutex = Mutex::new(());
         let _x = COND.wait(mutex.lock().unwrap()).unwrap();
