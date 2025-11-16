@@ -10,7 +10,7 @@
 //! ```
 //! # use zeek_websocket::client::*;
 //! struct Client {
-//!     sender: Option<Outbox>
+//!     outbox: Option<Outbox>
 //! }
 //!
 //! impl ZeekClient for Client {
@@ -19,8 +19,8 @@
 //!     async fn error(&mut self, _error: zeek_websocket::protocol::ProtocolError) {}
 //! }
 //!
-//! let service = Service::new(|sender| Client {
-//!     sender: Some(sender)
+//! let service = Service::new(|outbox| Client {
+//!     outbox: Some(outbox)
 //! });
 //! ```
 //!
@@ -51,15 +51,15 @@
 //! # use zeek_websocket::client::*;
 //! # use zeek_websocket::*;
 //! struct Client {
-//!     sender: Option<Outbox>,
+//!     outbox: Option<Outbox>,
 //! };
 //!
 //! impl ZeekClient for Client {
 //!     async fn connected(&mut self, ack: Message) {
 //!         // Once connected send a single echo event. The server will send
 //!         // the event back to us.
-//!         if let Some(sender) = &self.sender {
-//!             sender
+//!         if let Some(outbox) = &self.outbox {
+//!             outbox
 //!                 .send(("/topic".to_owned(), Event::new("echo", ["hello!"])))
 //!                 .await
 //!                 .unwrap();
@@ -67,10 +67,10 @@
 //!     }
 //!
 //!     async fn event(&mut self, topic: String, event: Event) {
-//!         // If we see the `echo` event from the server drop our `sender`.
+//!         // If we see the `echo` event from the server drop our `outbox`.
 //!         // This will cause the service to terminate.
 //!         if &event.name == "echo" {
-//!             self.sender.take();
+//!             self.outbox.take();
 //!         }
 //!     }
 //!
@@ -89,8 +89,8 @@
 //! # let zeek = zeek_websocket::test::MockServer::default();
 //! # let uri = zeek.endpoint().clone();
 //!
-//! let service = Service::new(|sender| Client {
-//!     sender: Some(sender),
+//! let service = Service::new(|outbox| Client {
+//!     outbox: Some(outbox),
 //! });
 //!
 //! service
@@ -319,7 +319,7 @@ mod test {
     use zeek_websocket_types::{Event, Message, Subscriptions};
 
     use crate::{
-        client::{Error, Service, ZeekClient},
+        client::{Error, Outbox, Service, ZeekClient},
         protocol::ProtocolError,
         test::MockServer,
     };
@@ -327,7 +327,7 @@ mod test {
     #[tokio::test]
     async fn unreachable_remote() {
         struct Client {
-            _sender: mpsc::Sender<(String, Event)>,
+            _outbox: Outbox,
         }
 
         impl ZeekClient for Client {
@@ -336,7 +336,7 @@ mod test {
             async fn error(&mut self, _error: ProtocolError) {}
         }
 
-        let service = Service::new(|_sender| Client { _sender });
+        let service = Service::new(|_outbox| Client { _outbox });
 
         let status = service
             .serve(
@@ -353,25 +353,22 @@ mod test {
         static TOPIC: &str = "/topic";
 
         struct C {
-            _sender: mpsc::Sender<(String, Event)>,
+            _outbox: Outbox,
             seen_events: mpsc::Sender<(String, Event)>,
         }
 
         impl C {
-            fn new(
-                sender: mpsc::Sender<(String, Event)>,
-                seen_events: mpsc::Sender<(String, Event)>,
-            ) -> Self {
+            fn new(outbox: Outbox, seen_events: mpsc::Sender<(String, Event)>) -> Self {
                 Self {
                     seen_events,
-                    _sender: sender,
+                    _outbox: outbox,
                 }
             }
         }
 
         impl ZeekClient for C {
             async fn connected(&mut self, _ack: Message) {
-                self._sender
+                self._outbox
                     .send((TOPIC.into(), Event::new("echo", [42])))
                     .await
                     .unwrap();

@@ -5,14 +5,14 @@ use zeek_websocket::{
 };
 
 struct Client {
-    sender: Option<Outbox>,
+    outbox: Option<Outbox>,
 }
 
 impl ZeekClient for Client {
     async fn connected(&mut self, _ack: zeek_websocket::Message) {
         // Once connected send a single echo event. The server will send the
         // event back to use.
-        if let Some(sender) = &self.sender {
+        if let Some(sender) = &self.outbox {
             sender
                 .send(("/ping".to_owned(), Event::new("ping", ["hi!"])))
                 .await
@@ -24,7 +24,7 @@ impl ZeekClient for Client {
         // If we see the `pong` from the `ping` we sent when we connected, drop the sender to
         // indicate we are done.
         if &_event.name == "pong" {
-            self.sender.take();
+            self.outbox.take();
         }
     }
 
@@ -36,7 +36,7 @@ impl ZeekClient for Client {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let service = Service::new(|sender| Client {
-        sender: Some(sender),
+        outbox: Some(sender),
     });
 
     service

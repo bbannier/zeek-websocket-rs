@@ -16,7 +16,7 @@ use zeek_websocket::{
 pub struct Client {
     rt: Runtime,
     _service: JoinHandle<()>,
-    publish: Option<Outbox>,
+    outbox: Option<Outbox>,
 }
 
 impl Client {
@@ -147,7 +147,7 @@ impl Client {
         Some(Box::new(Self {
             rt,
             _service: service,
-            publish,
+            outbox: publish,
         }))
     }
 
@@ -179,7 +179,7 @@ impl Client {
             return false;
         };
 
-        let publish = match &self.publish {
+        let publish = match &self.outbox {
             Some(publish) => publish,
             None => return false,
         };
