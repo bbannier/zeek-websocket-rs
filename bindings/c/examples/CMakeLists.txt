@@ -6,6 +6,7 @@ include(FetchContent)
 # Pull in the library.
 FetchContent_Declare(
   ZeekWebsocket
+  GIT_SHALLOW ON
   GIT_REPOSITORY https://github.com/bbannier/zeek-websocket-rs.git
   # TODO: replace `main` with a Git tag or revision.
   GIT_TAG main)
