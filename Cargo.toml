@@ -48,7 +48,7 @@ tungstenite = { workspace = true, features = ["native-tls"] }
 
 [workspace]
 members = [
-    "crates/zeek-websocket-c",
+    "bindings/c/zeek-websocket-c",
     "crates/zeek-websocket-derive",
     "crates/zeek-websocket-types"
 ]
