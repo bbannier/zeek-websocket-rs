@@ -183,8 +183,7 @@ impl Client {
             Some(publish) => publish,
             None => return false,
         };
-
-        match self.rt.block_on(publish.send((topic.to_owned(), event.0))) {
+        match publish.blocking_send((topic.to_owned(), event.0)) {
             Ok(()) => true,
             Err(SendError(_)) => {
                 // No need to invoke the error handler as the receiving side would only be closed
