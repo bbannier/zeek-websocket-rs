@@ -120,7 +120,7 @@ impl Client {
 
         let mut publish = None;
 
-        let service = client::Service::new_with_config(&config, |sender| {
+        let service = client::Service::new_with_config(config, |sender| {
             publish = Some(sender);
             Inner {
                 receive_callback,

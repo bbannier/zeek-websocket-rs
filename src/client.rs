@@ -130,7 +130,8 @@ pub type Outbox = mpsc::Sender<(String, Event)>;
 impl<C: ZeekClient> Service<C> {
     /// Construct a new service which the given configuration. The returned `Service` needs to be
     /// started with [`Service::serve`].
-    pub fn new_with_config<F>(config: &ServiceConfig, init: F) -> Self
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new_with_config<F>(config: ServiceConfig, init: F) -> Self
     where
         F: FnOnce(Outbox) -> C,
     {
@@ -149,7 +150,7 @@ impl<C: ZeekClient> Service<C> {
         // overwhelming the service loop with too much data. We could probably also pick a slightly
         // bigger number for less backpressure.
 
-        Self::new_with_config(&ServiceConfig::default(), init)
+        Self::new_with_config(ServiceConfig::default(), init)
     }
 
     /// Run the client against the server until either
