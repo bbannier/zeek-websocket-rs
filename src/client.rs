@@ -25,7 +25,7 @@
 //! ```
 //!
 //! [`Service::new`] passes along an [`Outbox`] which can be used to publish (topic, [`Event`])
-//! tuples to Zeek with [`Outbox::send`]. Clients should store the `Outbox` since after it is
+//! tuples to Zeek with `Outbox::send`. Clients should store the `Outbox` since after it is
 //! dropped the `Service` will close the connection to Zeek; one way to control the lifetime of the
 //! API connection is to store an `Option<Outbox>` in the client so it can explicitly be reset to
 //! `None`.
@@ -103,6 +103,8 @@
 //! # });
 //! ```
 
+use std::num::NonZeroUsize;
+
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc::{self};
 use tokio_tungstenite::{
@@ -117,6 +119,7 @@ use crate::{
     protocol::{self},
 };
 
+/// Runtime for a [`ZeekClient`].
 pub struct Service<S> {
     client: S,
     rx: mpsc::Receiver<(String, Event)>,
@@ -125,6 +128,19 @@ pub struct Service<S> {
 pub type Outbox = mpsc::Sender<(String, Event)>;
 
 impl<C: ZeekClient> Service<C> {
+    /// Construct a new service which the given configuration. The returned `Service` needs to be
+    /// started with [`Service::serve`].
+    pub fn new_with_config<F>(config: &ServiceConfig, init: F) -> Self
+    where
+        F: FnOnce(Outbox) -> C,
+    {
+        let (tx, rx) = mpsc::channel(config.outbox_size.into());
+        let client = init(tx);
+        Self { client, rx }
+    }
+
+    /// Constructs a new service with the default configuration. See
+    /// [`Service::new_with_config`] and [`ServiceConfig::default`] for more details.
     pub fn new<F>(init: F) -> Self
     where
         F: FnOnce(Outbox) -> C,
@@ -132,11 +148,8 @@ impl<C: ZeekClient> Service<C> {
         // We give the client a channel of size `1` for publishing. This prevents the client from
         // overwhelming the service loop with too much data. We could probably also pick a slightly
         // bigger number for less backpressure.
-        const CHANNEL_SIZE: usize = 1;
 
-        let (tx, rx) = mpsc::channel(CHANNEL_SIZE);
-        let client = init(tx);
-        Self { client, rx }
+        Self::new_with_config(&ServiceConfig::default(), init)
     }
 
     /// Run the client against the server until either
@@ -229,6 +242,33 @@ impl<C: ZeekClient> Service<C> {
         }
 
         Ok(())
+    }
+}
+
+/// Configuration for a [`Service`].
+#[derive(Debug, PartialEq)]
+pub struct ServiceConfig {
+    /// The number of entries which can be enqueue in the outbox.
+    pub outbox_size: NonZeroUsize,
+}
+
+impl Default for ServiceConfig {
+    /// Constructs a default service configuration.
+    ///
+    /// ```
+    /// # use std::num::NonZeroUsize;
+    /// # use zeek_websocket::client::ServiceConfig;
+    /// assert_eq!(
+    ///     ServiceConfig::default(),
+    ///     ServiceConfig {
+    ///         outbox_size: NonZeroUsize::new(256).unwrap(),
+    ///     },
+    /// );
+    /// ```
+    fn default() -> Self {
+        Self {
+            outbox_size: unsafe { NonZeroUsize::new_unchecked(256) },
+        }
     }
 }
 

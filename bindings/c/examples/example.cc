@@ -55,7 +55,7 @@ int main() {
   const auto *uri = "ws://localhost:8080/v1/messages/json";
 
   const Client client = zws_client_new(app_name, uri, topics.data(),
-                                       topics.size(), received, error);
+                                       topics.size(), received, error, nullptr);
 
   if (has_error)
     return 1;

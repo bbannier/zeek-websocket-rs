@@ -1,6 +1,7 @@
 use std::{
     ffi::{CStr, CString},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    num::NonZeroUsize,
     ptr, slice,
     time::Duration,
 };
@@ -8,7 +9,7 @@ use std::{
 use tokio::{runtime::Runtime, sync::mpsc::error::SendError, task::JoinHandle};
 use zeek_websocket::{
     IpNetwork,
-    client::{self, Outbox, ZeekClient},
+    client::{self, Outbox, ServiceConfig, ZeekClient},
     protocol::ProtocolError,
 };
 
@@ -27,6 +28,7 @@ impl Client {
     /// @params num_topics number of elements in `topics`
     /// @param receive_callback callback to invoke when a new event is received
     /// @param error_callback callback to invoke when an error is encounter
+    /// @param config if given the `ClientConfig` to use to deviate from the default
     ///
     /// The returned client must be freed by caller with `zws_client_free`.
     ///
@@ -37,6 +39,8 @@ impl Client {
     ///
     /// All passed strings must be NULL-terminated and point to valid UTF-8 strings.
     ///
+    /// `outbox_size` must either be unset, or point to a non-zero integer.
+    ///
     #[unsafe(no_mangle)]
     pub unsafe extern "C" fn zws_client_new(
         app_name: *const libc::c_char,
@@ -45,6 +49,7 @@ impl Client {
         num_topics: usize,
         receive_callback: ClientReceiveCallback,
         error_callback: ClientErrorCallback,
+        config: Option<&ClientConfig>,
     ) -> Option<Box<Self>> {
         let app_name = unsafe { CStr::from_ptr(app_name) }.to_str().ok()?;
 
@@ -111,9 +116,11 @@ impl Client {
             }
         }
 
+        let config = config.cloned().map(ServiceConfig::from).unwrap_or_default();
+
         let mut publish = None;
 
-        let service = client::Service::new(|sender| {
+        let service = client::Service::new_with_config(&config, |sender| {
             publish = Some(sender);
             Inner {
                 receive_callback,
@@ -148,6 +155,8 @@ impl Client {
     pub extern "C" fn zws_client_free(self: Box<Self>) {}
 
     /// Publish an event on a given topic.
+    ///
+    /// This operation blocks if more than `outbox_size` already wait to be send.
     ///
     /// The function takes ownership of `event`.
     ///
@@ -194,6 +203,41 @@ impl Client {
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_client_shutdown(self: Box<Self>, timeout_secs: u64) {
         self.rt.shutdown_timeout(Duration::from_secs(timeout_secs));
+    }
+}
+
+#[derive(Clone)]
+#[repr(C)]
+pub struct ClientConfig {
+    /// Numbers of entries which can be enqueued before publishing events blocks.
+    /// This value *must not* be zero.
+    outbox_size: usize,
+}
+
+impl ClientConfig {
+    #[unsafe(no_mangle)]
+    /// Create a new client config with sensible defaults.
+    extern "C" fn zws_clientconfig_new() -> Self {
+        ClientConfig::default()
+    }
+}
+
+impl Default for ClientConfig {
+    fn default() -> Self {
+        Self {
+            outbox_size: ServiceConfig::default().outbox_size.into(),
+        }
+    }
+}
+
+impl From<ClientConfig> for ServiceConfig {
+    /// # Safety
+    ///
+    /// - `ClientConfig::outbox_size` is documented to be non-zero.
+    fn from(value: ClientConfig) -> Self {
+        Self {
+            outbox_size: unsafe { NonZeroUsize::new_unchecked(value.outbox_size) },
+        }
     }
 }
 
@@ -892,6 +936,7 @@ mod test {
                 topics.len(),
                 receive_event_callback,
                 receive_error_callback,
+                None,
             )
         }
         .unwrap();
@@ -937,6 +982,7 @@ mod test {
                 topics.len(),
                 receive_event_callback,
                 receive_error_callback,
+                None,
             )
         }
         .unwrap();

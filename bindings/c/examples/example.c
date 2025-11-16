@@ -48,7 +48,7 @@ int main(void) {
   const char *uri = "ws://localhost:8080/v1/messages/json";
 
   struct zws_Client *client =
-      zws_client_new(app_name, uri, topics, NUM_TOPICS, received, error);
+      zws_client_new(app_name, uri, topics, NUM_TOPICS, received, error, NULL);
 
 #define NUM_ARGS 1
   struct zws_Value *args_[NUM_ARGS] = {zws_value_new_string("hi!")};
