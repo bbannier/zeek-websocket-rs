@@ -27,8 +27,8 @@ jobs:
         with:
           channel: stable
           bins: cargo-hack
-      - name: Check
-        run: cargo hack check --feature-powerset --workspace
+      - name: Clippy
+        run: cargo hack clippy --feature-powerset --workspace
       - name: Test
         run: cargo hack test --feature-powerset --workspace
       - name: Docs
