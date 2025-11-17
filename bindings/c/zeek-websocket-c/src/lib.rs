@@ -1,3 +1,4 @@
+//! C API for interacting with the Zeek WebSocket API.
 use std::{
     ffi::{CStr, CString},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
@@ -13,6 +14,7 @@ use zeek_websocket::{
     protocol::ProtocolError,
 };
 
+/// A client for interacting with the Zeek WebSocket API.
 pub struct Client {
     rt: Runtime,
     _service: JoinHandle<()>,
@@ -116,7 +118,7 @@ impl Client {
             }
         }
 
-        let config = config.cloned().map(ServiceConfig::from).unwrap_or_default();
+        let config = config.map(ServiceConfig::from).unwrap_or_default();
 
         let mut publish = None;
 
@@ -205,7 +207,7 @@ impl Client {
     }
 }
 
-#[derive(Clone)]
+/// Client configuration to be used with `zws_client_new`.
 #[repr(C)]
 pub struct ClientConfig {
     /// Numbers of entries which can be enqueued before publishing events blocks.
@@ -229,12 +231,10 @@ impl Default for ClientConfig {
     }
 }
 
-impl From<ClientConfig> for ServiceConfig {
-    /// # Safety
-    ///
-    /// - `ClientConfig::outbox_size` is documented to be non-zero.
-    fn from(value: ClientConfig) -> Self {
+impl From<&ClientConfig> for ServiceConfig {
+    fn from(value: &ClientConfig) -> Self {
         Self {
+            // `ClientConfig::outbox_size` is documented to be non-zero.
             outbox_size: unsafe { NonZeroUsize::new_unchecked(value.outbox_size) },
         }
     }
@@ -284,6 +284,7 @@ impl From<&ProtocolError> for ClientError {
     }
 }
 
+/// An encoded event.
 pub struct Event(zeek_websocket::Event);
 
 impl Event {
@@ -345,6 +346,7 @@ impl Event {
     }
 }
 
+/// A type holding a Zeek WebSocket API value variant.
 #[derive(Clone, PartialEq)]
 pub struct Value(pub(crate) zeek_websocket::Value);
 
@@ -614,7 +616,7 @@ impl Value {
 
     /// Returned value must be freed by caller with `zws_list_free`.
     ///
-    /// `data` ownership is passed to function.
+    /// `self` ownership is passed to function.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_as_vector(self: Box<Self>) -> Option<Box<List>> {
         if let zeek_websocket::Value::Vector(xs) = self.0 {
@@ -627,7 +629,7 @@ impl Value {
 
     /// Returned value must be freed by caller with `zws_list_free`.
     ///
-    /// `data` ownership is passed to function.
+    /// `self` ownership is passed to function.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_as_set(self: Box<Self>) -> Option<Box<List>> {
         if let zeek_websocket::Value::Set(xs) = self.0 {
@@ -640,7 +642,7 @@ impl Value {
 
     /// Returned value must be freed by caller with `zws_table_free`.
     ///
-    /// `data` ownership is passed to function.
+    /// `self` ownership is passed to function.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_as_table(self: Box<Self>) -> Option<Box<Table>> {
         if let zeek_websocket::Value::Table(xs) = self.0 {
@@ -655,10 +657,14 @@ impl Value {
     }
 }
 
+/// An entry in a table.
 #[repr(C)]
 pub struct TableEntry {
-    key: Box<Value>,
-    value: Box<Value>,
+    /// Key for the entry.
+    pub key: Box<Value>,
+
+    /// Value for the entry.
+    pub value: Box<Value>,
 }
 
 impl From<TableEntry> for zeek_websocket::TableEntry {
@@ -667,6 +673,7 @@ impl From<TableEntry> for zeek_websocket::TableEntry {
     }
 }
 
+/// Type held by a value.
 #[repr(C)]
 pub enum ValueType {
     None,
@@ -686,6 +693,7 @@ pub enum ValueType {
     Table,
 }
 
+/// A list of encoded values.
 pub struct List(pub(crate) Vec<Value>);
 
 impl List {
@@ -728,9 +736,12 @@ impl List {
     pub extern "C" fn zws_list_free(self: Box<Self>) {}
 }
 
+/// An encoded table.
 pub struct Table(pub(crate) Vec<(Value, Value)>);
 
 impl Table {
+    /// Get the a list of keys in the table.
+    ///
     /// Returned value must be freed by caller with `zws_list_free`.
     #[unsafe(no_mangle)]
     #[allow(unused_variables)]
@@ -738,6 +749,9 @@ impl Table {
         Box::new(List(self.0.iter().map(|(k, _)| k.clone()).collect()))
     }
 
+    /// Get an entry in the table.
+    ///
+    /// Returns a pointer to the entry's value if present, or `NULL`.
     #[unsafe(no_mangle)]
     #[allow(unused_variables)]
     pub extern "C" fn zws_table_get<'a>(&'a self, key: &Value) -> Option<&'a Value> {
@@ -749,10 +763,14 @@ impl Table {
     pub extern "C" fn zws_table_free(data: Box<Self>) {}
 }
 
+/// An unsigned 128-bit integer value.
 #[repr(C)]
 pub struct U128 {
-    low: u64,
-    high: u64,
+    /// Low bits of the integer.
+    pub low: u64,
+
+    /// High bits of the value.
+    pub high: u64,
 }
 
 impl From<&U128> for u128 {
@@ -771,6 +789,7 @@ impl From<u128> for U128 {
     }
 }
 
+/// An encoded IP address.
 pub struct Address(pub(crate) IpAddr);
 
 impl Address {
@@ -816,12 +835,14 @@ impl Address {
     }
 }
 
+/// Type of an address.
 #[repr(C)]
 pub enum AddressType {
     V4,
     V6,
 }
 
+/// An encoded subnet.
 #[repr(C)]
 pub struct Subnet {
     pub(crate) addr: Box<Address>,
@@ -833,6 +854,7 @@ impl Subnet {
     pub extern "C" fn zws_subnet_free(self: Box<Self>) {}
 }
 
+/// Protocol for a port.
 #[repr(C)]
 pub enum Protocol {
     TCP,
@@ -863,10 +885,14 @@ impl From<zeek_websocket::Protocol> for Protocol {
     }
 }
 
+/// An encoded port.
 #[repr(C)]
 pub struct Port {
-    number: u16,
-    protocol: Protocol,
+    /// Port number.
+    pub number: u16,
+
+    /// Protocol for the port.
+    pub protocol: Protocol,
 }
 
 impl From<Port> for zeek_websocket::Port {
