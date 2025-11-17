@@ -60,7 +60,7 @@
 //!         // the event back to us.
 //!         if let Some(outbox) = &self.outbox {
 //!             outbox
-//!                 .send(("/topic".to_owned(), Event::new("echo", ["hello!"])))
+//!                 .send("/topic".to_owned(), Event::new("echo", ["hello!"]))
 //!                 .await
 //!                 .unwrap();
 //!         }
@@ -125,8 +125,6 @@ pub struct Service<S> {
     rx: mpsc::Receiver<(String, Event)>,
 }
 
-pub type Outbox = mpsc::Sender<(String, Event)>;
-
 impl<C: ZeekClient> Service<C> {
     /// Construct a new service which the given configuration. The returned `Service` needs to be
     /// started with [`Service::serve`].
@@ -136,7 +134,7 @@ impl<C: ZeekClient> Service<C> {
         F: FnOnce(Outbox) -> C,
     {
         let (tx, rx) = mpsc::channel(config.outbox_size.into());
-        let client = init(tx);
+        let client = init(Outbox(tx));
         Self { client, rx }
     }
 
@@ -243,6 +241,26 @@ impl<C: ZeekClient> Service<C> {
         }
 
         Ok(())
+    }
+}
+
+/// Handle for publishing into a [`Service`].
+///
+/// This is intended to be held by implementers of [`ZeekClient`] to publish events to Zeek, and
+/// is created during e.g., [`Service::new`]. `Service` holds on to the receiving side and will keep
+/// checking it. Dropping the `Outbox` indicates to the `Service` that the client is done and will
+/// cause it to terminate, so clients should hold the `Outbox` for as long as they intend to stay
+/// connected, and explicitly `drop` it.
+pub struct Outbox(mpsc::Sender<(String, Event)>);
+
+impl Outbox {
+    /// Enqueue an event on the given topic.
+    ///
+    /// # Errors
+    ///
+    /// Returns back the enqueued event when the outbox has been closed.
+    pub async fn send(&self, topic: String, event: Event) -> Result<(), (String, Event)> {
+        self.0.send((topic, event)).await.map_err(|e| e.0)
     }
 }
 
@@ -369,7 +387,7 @@ mod test {
         impl ZeekClient for C {
             async fn connected(&mut self, _ack: Message) {
                 self._outbox
-                    .send((TOPIC.into(), Event::new("echo", [42])))
+                    .send(TOPIC.into(), Event::new("echo", [42]))
                     .await
                     .unwrap();
             }

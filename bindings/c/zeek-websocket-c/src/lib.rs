@@ -1,4 +1,3 @@
-//! C API for interacting with the Zeek WebSocket API.
 use std::{
     ffi::{CStr, CString},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
@@ -7,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use tokio::{runtime::Runtime, sync::mpsc::error::SendError, task::JoinHandle};
+use tokio::{runtime::Runtime, task::JoinHandle};
 use zeek_websocket::{
     IpNetwork,
     client::{self, Outbox, ServiceConfig, ZeekClient},
@@ -185,9 +184,12 @@ impl Client {
             Some(publish) => publish,
             None => return false,
         };
-        match publish.blocking_send((topic.to_owned(), event.0)) {
+        match self
+            .rt
+            .block_on(async { publish.send(topic.to_owned(), event.0).await })
+        {
             Ok(()) => true,
-            Err(SendError(_)) => {
+            Err(_) => {
                 // No need to invoke the error handler as the receiving side would only be closed
                 // in case of error which would already invoke it.
                 false

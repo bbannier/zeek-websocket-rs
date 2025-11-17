@@ -19,7 +19,7 @@ impl Default for MockServer {
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
 
         let handle = std::thread::spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread()
+            let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_io()
                 .build()
                 .expect("could not build runtime");

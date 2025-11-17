@@ -14,7 +14,7 @@ impl ZeekClient for Client {
         // event back to use.
         if let Some(sender) = &self.outbox {
             sender
-                .send(("/ping".to_owned(), Event::new("ping", ["hi!"])))
+                .send("/ping".to_owned(), Event::new("ping", ["hi!"]))
                 .await
                 .unwrap();
         }
