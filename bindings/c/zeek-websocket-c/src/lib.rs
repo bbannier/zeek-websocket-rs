@@ -352,15 +352,6 @@ impl Event {
 #[derive(Clone, PartialEq)]
 pub struct Value(pub(crate) zeek_websocket::Value);
 
-macro_rules! getter {
-    ($id:ident, $t:ty, $v:path) => {
-        #[unsafe(no_mangle)]
-        pub extern "C" fn $id(&self) -> Option<&$t> {
-            if let $v(x) = &self.0 { Some(x) } else { None }
-        }
-    };
-}
-
 impl Value {
     /// Returned value must be freed by caller with `zws_value_free`.
     #[unsafe(no_mangle)]
@@ -540,13 +531,41 @@ impl Value {
         }
     }
 
-    getter!(zws_value_as_bool, bool, zeek_websocket::Value::Boolean);
+    #[unsafe(no_mangle)]
+    pub extern "C" fn zws_value_as_bool(&self, result: &mut bool) -> bool {
+        let zeek_websocket::Value::Boolean(x) = &self.0 else {
+            return false;
+        };
+        *result = *x;
+        true
+    }
 
-    getter!(zws_value_as_count, u64, zeek_websocket::Value::Count);
+    #[unsafe(no_mangle)]
+    pub extern "C" fn zws_value_as_count(&self, result: &mut u64) -> bool {
+        let zeek_websocket::Value::Count(x) = &self.0 else {
+            return false;
+        };
+        *result = *x;
+        true
+    }
 
-    getter!(zws_value_as_integer, i64, zeek_websocket::Value::Integer);
+    #[unsafe(no_mangle)]
+    pub extern "C" fn zws_value_as_integer(&self, result: &mut i64) -> bool {
+        let zeek_websocket::Value::Integer(x) = &self.0 else {
+            return false;
+        };
+        *result = *x;
+        true
+    }
 
-    getter!(zws_value_as_real, f64, zeek_websocket::Value::Real);
+    #[unsafe(no_mangle)]
+    pub extern "C" fn zws_value_as_real(&self, result: &mut f64) -> bool {
+        let zeek_websocket::Value::Real(x) = &self.0 else {
+            return false;
+        };
+        *result = *x;
+        true
+    }
 
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_as_timespan(&self) -> i64 {
