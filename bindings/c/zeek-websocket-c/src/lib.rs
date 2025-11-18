@@ -605,79 +605,94 @@ impl Value {
         }
     }
 
-    /// Returned value must be freed by caller.
-    #[unsafe(no_mangle)]
-    pub extern "C" fn zws_value_as_address(&self) -> Option<Box<Address>> {
-        if let zeek_websocket::Value::Address(addr) = &self.0 {
-            Some(Box::new(Address(*addr)))
-        } else {
-            None
-        }
-    }
-
-    /// Returned value must be freed by caller with `zws_subnet_free`.
-    #[unsafe(no_mangle)]
-    pub extern "C" fn zws_value_as_subnet(&self) -> Option<Box<Subnet>> {
-        if let zeek_websocket::Value::Subnet(subnet) = &self.0 {
-            Some(Box::new(Subnet {
-                addr: Box::new(Address(subnet.ip())),
-                prefix: subnet.prefix(),
-            }))
-        } else {
-            None
-        }
-    }
-
-    /// Returned value must be freed by caller.
-    #[unsafe(no_mangle)]
-    pub extern "C" fn zws_value_as_port(&self) -> Option<Box<Port>> {
-        if let zeek_websocket::Value::Port(port) = self.0 {
-            Some(Box::new(port.into()))
-        } else {
-            None
-        }
-    }
-
-    /// Returned value must be freed by caller with `zws_list_free`.
+    /// Converts this value into an address and stores the result in the provided pointer.
+    ///
+    /// Returns `true` if the conversion was successful, `false` otherwise.
     ///
     /// `self` ownership is passed to function.
     #[unsafe(no_mangle)]
-    pub extern "C" fn zws_value_as_vector(self: Box<Self>) -> Option<Box<List>> {
-        if let zeek_websocket::Value::Vector(xs) = self.0 {
-            let xs: Vec<_> = xs.into_iter().map(Value).collect();
-            Some(Box::new(List(xs)))
-        } else {
-            None
-        }
+    pub extern "C" fn zws_value_as_address(&self, result: &mut Address) -> bool {
+        let zeek_websocket::Value::Address(addr) = &self.0 else {
+            return false;
+        };
+        *result = Address(*addr);
+        true
     }
 
-    /// Returned value must be freed by caller with `zws_list_free`.
+    /// Converts this value into a subnet and stores the result in the provided pointer.
+    ///
+    /// Returns `true` if the conversion was successful, `false` otherwise.
     ///
     /// `self` ownership is passed to function.
     #[unsafe(no_mangle)]
-    pub extern "C" fn zws_value_as_set(self: Box<Self>) -> Option<Box<List>> {
-        if let zeek_websocket::Value::Set(xs) = self.0 {
-            let xs: Vec<_> = xs.into_iter().map(Value).collect();
-            Some(Box::new(List(xs)))
-        } else {
-            None
-        }
+    pub extern "C" fn zws_value_as_subnet(&self, result: &mut Subnet) -> bool {
+        let zeek_websocket::Value::Subnet(subnet) = &self.0 else {
+            return false;
+        };
+        *result = Subnet {
+            addr: Box::new(Address(subnet.ip())),
+            prefix: subnet.prefix(),
+        };
+        true
     }
 
-    /// Returned value must be freed by caller with `zws_table_free`.
+    /// Converts this value into a vector and stores the result in the provided pointer.
+    ///
+    /// Returns `true` if the conversion was successful, `false` otherwise.
     ///
     /// `self` ownership is passed to function.
     #[unsafe(no_mangle)]
-    pub extern "C" fn zws_value_as_table(self: Box<Self>) -> Option<Box<Table>> {
-        if let zeek_websocket::Value::Table(xs) = self.0 {
-            let xs: Vec<_> = xs
-                .into_iter()
-                .map(|zeek_websocket::TableEntry { key, value }| (Value(key), Value(value)))
-                .collect();
-            Some(Box::new(Table(xs)))
-        } else {
-            None
-        }
+    pub extern "C" fn zws_value_as_port(&self, result: &mut Port) -> bool {
+        let zeek_websocket::Value::Port(port) = self.0 else {
+            return false;
+        };
+        *result = port.into();
+        true
+    }
+
+    /// Converts this value into a vector and stores the result in the provided pointer.
+    ///
+    /// Returns `true` if the conversion was successful, `false` otherwise.
+    ///
+    /// `self` ownership is passed to function.
+    #[unsafe(no_mangle)]
+    pub extern "C" fn zws_value_as_vector(self: Box<Self>, result: &mut List) -> bool {
+        let zeek_websocket::Value::Vector(xs) = self.0 else {
+            return false;
+        };
+        result.0 = xs.into_iter().map(Value).collect();
+        true
+    }
+
+    /// Converts this value into a set and stores the result in the provided pointer.
+    ///
+    /// Returns `true` if the conversion was successful, `false` otherwise.
+    ///
+    /// `self` ownership is passed to function.
+    #[unsafe(no_mangle)]
+    pub extern "C" fn zws_value_as_set(self: Box<Self>, result: &mut List) -> bool {
+        let zeek_websocket::Value::Set(xs) = self.0 else {
+            return false;
+        };
+        result.0 = xs.into_iter().map(Value).collect();
+        true
+    }
+
+    /// Converts this value into a table and stores the result in the provided pointer.
+    ///
+    /// Returns `true` if the conversion was successful, `false` otherwise.
+    ///
+    /// `self` ownership is passed to function.
+    #[unsafe(no_mangle)]
+    pub extern "C" fn zws_value_as_table(self: Box<Self>, result: &mut Table) -> bool {
+        let zeek_websocket::Value::Table(xs) = self.0 else {
+            return false;
+        };
+        result.0 = xs
+            .into_iter()
+            .map(|zeek_websocket::TableEntry { key, value }| (Value(key), Value(value)))
+            .collect();
+        true
     }
 }
 
@@ -811,7 +826,7 @@ impl Address {
         self.0.is_ipv6()
     }
 
-    /// Convert this value into an IPv4 address and stores the result in the provided pointer.
+    /// Converts this value into an IPv4 address and stores the result in the provided pointer.
     ///
     /// Returns `true` if the conversion was successful, `false` otherwise.
     #[unsafe(no_mangle)]
@@ -823,7 +838,7 @@ impl Address {
         true
     }
 
-    /// Convert this value into an IPv6 address and stores the result in the provided pointer.
+    /// Converts this value into an IPv6 address and stores the result in the provided pointer.
     ///
     /// Returns `true` if the conversion was successful, `false` otherwise.
     #[unsafe(no_mangle)]
