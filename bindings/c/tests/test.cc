@@ -1,9 +1,10 @@
 #include <arpa/inet.h>
+
+#include <array>
 #include <cstring>
-#include <gtest/gtest.h>
-#include <netinet/in.h>
 #include <string_view>
-#include <sys/socket.h>
+
+#include <gtest/gtest.h>
 #include <zeek-websocket.h>
 
 // RAII wrapper around zws types.
@@ -13,6 +14,8 @@ struct RAII : std::unique_ptr<T, decltype(free_t)> {
 };
 
 using Address = RAII<zws_Address, zws_address_free>;
+using List = RAII<zws_List, zws_list_free>;
+using Value = RAII<zws_Value, zws_value_free>;
 
 TEST(Address, V4) {
   struct in_addr lo;
@@ -43,4 +46,22 @@ TEST(Address, V6) {
   std::string buf(INET6_ADDRSTRLEN, '\0');
   ASSERT_TRUE(inet_ntop(AF_INET6, &result, buf.data(), buf.size()));
   EXPECT_EQ(std::string_view(buf.c_str()), "::1");
+}
+
+TEST(List, empty) {
+  {
+    List xs = zws_list_new(nullptr, 0);
+    EXPECT_EQ(zws_list_size(xs.get()), 0);
+  }
+
+  {
+    List xs = zws_list_new(nullptr, 1);
+    EXPECT_EQ(zws_list_size(xs.get()), 0);
+  }
+
+  {
+    std::array values{static_cast<zws_Value *>(nullptr)};
+    List xs = zws_list_new(values.data(), 0);
+    EXPECT_EQ(zws_list_size(xs.get()), 0);
+  }
 }

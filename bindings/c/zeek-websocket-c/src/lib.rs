@@ -738,9 +738,11 @@ pub struct List(pub(crate) Vec<Value>);
 impl List {
     /// `values` ownership is passed to function.
     ///
+    /// If either `values=NULL` or `num_values=0` an empty list is created.
+    ///
     /// # Safety
     ///
-    /// * `values` must point to an array of `num_value` `Value` objects
+    /// * if set, `values` must point to an array of `num_value` `Value` objects
     ///
     #[unsafe(no_mangle)]
     #[allow(unused_variables)]
