@@ -568,20 +568,21 @@ impl Value {
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn zws_value_as_timespan(&self) -> i64 {
-        if let zeek_websocket::Value::Timespan(x) = &self.0 {
-            return x.num_nanoseconds().unwrap_or_default();
+    pub extern "C" fn zws_value_as_timespan(&self, result: &mut i64) -> bool {
+        let zeek_websocket::Value::Timespan(x) = &self.0 else {
+            return false;
         };
-        Default::default()
+        *result = x.num_nanoseconds().unwrap_or_default();
+        true
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn zws_value_as_timestamp(&self) -> i64 {
-        if let zeek_websocket::Value::Timestamp(x) = &self.0 {
-            x.and_utc().timestamp_nanos_opt().unwrap_or_default()
-        } else {
-            Default::default()
-        }
+    pub extern "C" fn zws_value_as_timestamp(&self, result: &mut i64) -> bool {
+        let zeek_websocket::Value::Timestamp(x) = &self.0 else {
+            return false;
+        };
+        *result = x.and_utc().timestamp_nanos_opt().unwrap_or_default();
+        true
     }
 
     #[unsafe(no_mangle)]
