@@ -1,3 +1,5 @@
+//! C API for interacting with the Zeek WebSocket API.
+
 use std::{
     ffi::{CStr, CString},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},

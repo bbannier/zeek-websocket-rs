@@ -111,7 +111,10 @@ use tokio_tungstenite::{
     connect_async,
     tungstenite::{self, http::Uri},
 };
-use tungstenite::ClientRequestBuilder;
+use tungstenite::{
+    ClientRequestBuilder, Utf8Bytes,
+    protocol::{CloseFrame, frame::coding::CloseCode},
+};
 use zeek_websocket_types::{DeserializationError, Event, Message, Subscriptions};
 
 use crate::{
@@ -199,6 +202,12 @@ impl<C: ZeekClient> Service<C> {
                 s = self.rx.recv() => {
                     let Some((topic, event)) = s else {
                         // Sender closed, graceful exit.
+                        stream
+                            .send(tungstenite::Message::Close(Some(CloseFrame {
+                                code: CloseCode::Normal,
+                                reason: Utf8Bytes::default(),
+                            })))
+                            .await?;
                         break;
                     };
 
