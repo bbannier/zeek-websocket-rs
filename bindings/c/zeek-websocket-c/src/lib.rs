@@ -605,7 +605,7 @@ impl Value {
         }
     }
 
-    /// Returned value must be freed by caller with `zws_address_free`.
+    /// Returned value must be freed by caller.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_as_address(&self) -> Option<Box<Address>> {
         if let zeek_websocket::Value::Address(addr) = &self.0 {
@@ -787,83 +787,53 @@ impl Table {
     pub extern "C" fn zws_table_free(data: Box<Self>) {}
 }
 
-/// An unsigned 128-bit integer value.
-#[repr(C)]
-pub struct U128 {
-    /// Low bits of the integer.
-    pub low: u64,
-
-    /// High bits of the value.
-    pub high: u64,
-}
-
-impl From<&U128> for u128 {
-    fn from(value: &U128) -> Self {
-        let high = (value.high as u128) << 64;
-        let low = value.low as u128;
-        high | low
-    }
-}
-
-impl From<u128> for U128 {
-    fn from(value: u128) -> Self {
-        let low = value as u64;
-        let high = (value >> 64) as u64;
-        U128 { low, high }
-    }
-}
-
 /// An encoded IP address.
 pub struct Address(pub(crate) IpAddr);
 
 impl Address {
     /// Returned value must be freed by caller with `zws_address_free`.
     #[unsafe(no_mangle)]
-    pub extern "C" fn zws_address_new_v4(data: u32) -> Box<Self> {
-        Box::new(Self(IpAddr::V4(Ipv4Addr::from_bits(data))))
+    pub extern "C" fn zws_address_new_v4(data: &libc::in_addr) -> Box<Self> {
+        Box::new(Self(Ipv4Addr::from(data.s_addr.to_ne_bytes()).into()))
+    }
+
+    /// Returned value must be freed by caller with `zws_address_free`.
+    #[unsafe(no_mangle)]
+    pub extern "C" fn zws_address_new_v6(data: &libc::in6_addr) -> Box<Self> {
+        Box::new(Self(IpAddr::from(Ipv6Addr::from_octets(data.s6_addr))))
     }
 
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_address_free(self: Box<Address>) {}
 
-    /// Returned value must be freed by caller with `zws_address_free`.
     #[unsafe(no_mangle)]
-    pub extern "C" fn zws_address_new_v6(data: &U128) -> Box<Self> {
-        Box::new(Self(IpAddr::V6(Ipv6Addr::from_bits(data.into()))))
+    pub extern "C" fn zws_address_is_v6(&self) -> bool {
+        self.0.is_ipv6()
     }
 
+    /// Convert this value into an IPv4 address and stores the result in the provided pointer.
+    ///
+    /// Returns `true` if the conversion was successful, `false` otherwise.
     #[unsafe(no_mangle)]
-    pub extern "C" fn zws_address_type(&self) -> AddressType {
-        match &self.0 {
-            IpAddr::V4(_) => AddressType::V4,
-            IpAddr::V6(_) => AddressType::V6,
-        }
+    pub extern "C" fn zws_address_as_v4(&self, result: &mut libc::in_addr) -> bool {
+        let IpAddr::V4(addr) = &self.0 else {
+            return false;
+        };
+        result.s_addr = addr.to_bits().to_be();
+        true
     }
 
-    /// Returned value must be freed by caller.
+    /// Convert this value into an IPv6 address and stores the result in the provided pointer.
+    ///
+    /// Returns `true` if the conversion was successful, `false` otherwise.
     #[unsafe(no_mangle)]
-    pub extern "C" fn zws_address_as_v4(&self) -> Option<Box<u32>> {
-        if let IpAddr::V4(addr) = &self.0 {
-            return Some(Box::new(addr.to_bits()));
-        }
-        None
+    pub extern "C" fn zws_address_as_v6(&self, result: &mut libc::in6_addr) -> bool {
+        let IpAddr::V6(addr) = &self.0 else {
+            return false;
+        };
+        result.s6_addr.copy_from_slice(&addr.octets());
+        true
     }
-
-    /// Returned value must be freed by caller.
-    #[unsafe(no_mangle)]
-    pub extern "C" fn zws_address_as_v6(&self) -> Option<Box<U128>> {
-        if let IpAddr::V6(addr) = &self.0 {
-            return Some(Box::new(addr.to_bits().into()));
-        }
-        None
-    }
-}
-
-/// Type of an address.
-#[repr(C)]
-pub enum AddressType {
-    V4,
-    V6,
 }
 
 /// An encoded subnet.
@@ -913,7 +883,7 @@ impl From<zeek_websocket::Protocol> for Protocol {
 #[repr(C)]
 pub struct Port {
     /// Port number.
-    pub number: u16,
+    pub number: libc::in_port_t,
 
     /// Protocol for the port.
     pub protocol: Protocol,

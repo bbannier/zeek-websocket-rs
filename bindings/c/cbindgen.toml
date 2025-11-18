@@ -1,8 +1,20 @@
 language = "C"
 cpp_compat = true
 
+sys_includes = [
+    "netinet/in.h",
+    "sys/socket.h",
+]
+
 [export]
 prefix = "zws_"
+renaming_overrides_prefixing = true
+
+# Rename libc identifiers to prevent them being used with above prefix.
+[export.rename]
+in_port_t = "in_port_t"
+in_addr = "struct in_addr"
+in6_addr = "struct in6_addr"
 
 [enum]
 rename_variants = "QualifiedScreamingSnakeCase"

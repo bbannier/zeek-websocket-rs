@@ -71,13 +71,19 @@ jobs:
         with:
           channel: stable
           bins: cbindgen
+      - name: Run tests
+        run: |
+          cmake -Bbuild -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build
+          cd build && ctest
       - name: Create archive
         run: |
           git archive --prefix=zeek-websocket-rs/ HEAD > bindings/c/examples/zeek-websocket-rs.tar
       - name: Patch CMake setup
         run: |
           sed -i "s~GIT_REPOSITORY.*$~URL\ file://\${CMAKE_CURRENT_SOURCE_DIR}/zeek-websocket-rs.tar~" bindings/c/examples/CMakeLists.txt
-      - uses: threeal/cmake-action@725d1314ccf9ea922805d7e3f9d9bcbca892b406
+      - name: Build examples
+        uses: threeal/cmake-action@725d1314ccf9ea922805d7e3f9d9bcbca892b406
         with:
           source-dir: bindings/c/examples
 

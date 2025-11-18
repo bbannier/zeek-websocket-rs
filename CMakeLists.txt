@@ -36,3 +36,21 @@ target_include_directories(
     $<INSTALL_INTERFACE:include>)
 
 target_link_libraries(ZeekWebSocket INTERFACE zeek_websocket_c)
+
+option(ZEEK_WEBSOCKET_TESTING "Enable test targets" ON)
+if(ZEEK_WEBSOCKET_TESTING)
+  include(FetchContent)
+  FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/releases/download/v1.17.0/googletest-1.17.0.tar.gz
+  )
+  FetchContent_MakeAvailable(googletest)
+
+  enable_testing()
+
+  add_executable(test-cxx ${CMAKE_CURRENT_SOURCE_DIR}/bindings/c/tests/test.cc)
+  target_link_libraries(test-cxx GTest::gtest_main ZeekWebSocket)
+
+  include(GoogleTest)
+  gtest_discover_tests(test-cxx)
+endif(ZEEK_WEBSOCKET_TESTING)
