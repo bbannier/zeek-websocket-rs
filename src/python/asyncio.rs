@@ -37,6 +37,10 @@ impl ZeekClient {
 
     /// Asynchronously send an event on the given topic.
     ///
+    /// This function enqueues the event on a queue which is processed by a separate thread.
+    /// Callers should release the GIL if they plan to enqueue many event, e.g., by using a
+    /// separate task to perform the `publish` call.
+    ///
     /// Callers should `await` the result.
     fn publish<'py>(
         &mut self,
