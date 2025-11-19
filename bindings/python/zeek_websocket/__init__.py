@@ -11,14 +11,24 @@ from collections.abc import Sequence
 import websockets.sync.client
 
 from .zeek_websocket import *  # noqa: F403
-from .zeek_websocket import Event, Protocol, ProtocolBinding, Value, make_value
+from .zeek_websocket import (
+    Event,
+    Protocol,
+    ProtocolBinding,
+    Service,
+    Value,
+    ZeekClient,
+    make_value,
+)
 
 __all__ = [
     "Client",
     "Event",
     "Protocol",
     "ProtocolBinding",
+    "Service",
     "Value",
+    "ZeekClient",
     "make_value",
 ]
 

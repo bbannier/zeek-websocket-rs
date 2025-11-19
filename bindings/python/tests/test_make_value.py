@@ -170,7 +170,7 @@ def test_record_other() -> None:
     assert str(value) == 'Record({"c": Real(1.0), "d": String("2")})'
 
     assert value.value == {"c": Value.Real(1), "d": Value.String("2")}
-    with pytest.raises(RuntimeError) as err:
+    with pytest.raises(ValueError) as err:
         value.as_record(Y)
     assert (
         str(err.value)

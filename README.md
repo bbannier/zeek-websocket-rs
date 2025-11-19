@@ -13,14 +13,48 @@ While this is primarily a Rust library we expose bindings for
 ### Python bindings
 
 Python bindings are generated with [PyO3](https://github.com/PyO3/pyo3) which
-makes use of Rust completely transparent to users. The intended main component
-of the Python bindings is the
-[`Client`](bindings/python/zeek_websocket/__init__.py) type which allows to
-receive and send Zeek events as
+makes use of Rust completely transparent to users.
+
+We provide two ways to interact with Zeek:
+
+- [`ZeekClient`](bindings/python/zeek_websocket/zeek_websocket.pyi) for an
+  asynchronous interface
+- [`Client`](bindings/python/zeek_websocket/__init__.py) for a synchronous
+  interface
+
+If possible we suggest to use `ZeekClient`.
+
+Both `ZeekClient` and `Client` allow to receive and send Zeek events as
 [`Event`](bindings/python/zeek_websocket/zeek_websocket.pyi) values.
 
+#### Example: Asynchronous API
+
 ```python
-# Connect a client to the Zeek WebSocket API endpoint.
+# Connect an asynchronous client to the Zeek WebSocket API endpoint.
+class Client(ZeekClient):
+    async def connected(self, ack: dict[str, str]) -> None:
+        print(f"Client connected to endpoint {ack}")
+
+        # Once connected publish a "ping" event.
+        await self.publish("/ping", Event("ping", ["hi"], ()))
+
+    async def event(self, topic: str, event: Event) -> None:
+        print(f"Received {event} on {topic}")
+
+        # Stop the client once we have seen an event.
+        self.disconnect()
+
+    async def error(self, error: str) -> None:
+        raise NotImplementedError(error)
+
+# Run the client until it either explicitly disconnects, or hits a fatal error.
+await Service.run(Client(), "client", mock_server, ["/ping"])
+```
+
+#### Example: Synchronous API
+
+```python
+# Connect a synchronous client to the Zeek WebSocket API endpoint.
 client = Client(
     "client", endpoint_uri="ws://127.0.0.1:80/v1/messages/json", topics=["/topic1"])
 

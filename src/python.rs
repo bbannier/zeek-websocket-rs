@@ -7,12 +7,14 @@ use ipnetwork::IpNetwork;
 use ordered_float::OrderedFloat;
 use pyo3::{
     IntoPyObjectExt,
-    exceptions::{PyRuntimeError, PyTypeError},
+    exceptions::{PyRuntimeError, PyTypeError, PyValueError},
     intern,
     prelude::*,
     types::{PyBytes, PyDict, PyNone, PyTuple, PyType},
 };
 use zeek_websocket_types::{TableEntry, Value as RustValue};
+
+mod asyncio;
 
 /// Construct a new value and infers its type.
 ///
@@ -117,7 +119,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Value {
         else if let Ok(x) = {
             obj.getattr_opt("__dict__").and_then(|x| {
                 let x = x.ok_or_else(|| {
-                    PyRuntimeError::new_err("argument does not have a __dict__ attribute")
+                    PyValueError::new_err("argument does not have a __dict__ attribute")
                 })?;
                 let x: &Bound<PyDict> = x.cast()?;
                 let x: PyResult<_> = x
@@ -175,7 +177,7 @@ impl Value {
             .extract()?;
 
         if !is_dataclass {
-            return Err(PyRuntimeError::new_err(format!(
+            return Err(PyValueError::new_err(format!(
                 "{target_type} is not a dataclass"
             )));
         }
@@ -270,7 +272,7 @@ impl TryFrom<Value> for RustValue {
             Value::Port(n, p) => RustValue::Port(zeek_websocket_types::Port::new(n, p.into())),
             Value::Subnet(addr, prefix) => RustValue::Subnet(
                 IpNetwork::new(addr, prefix)
-                    .map_err(|err| PyRuntimeError::new_err(err.to_string()))?,
+                    .map_err(|err| PyValueError::new_err(err.to_string()))?,
             ),
             Value::Enum(x) => RustValue::EnumValue(x),
             Value::None_() => RustValue::None,
@@ -450,5 +452,9 @@ impl ProtocolBinding {
 #[pymodule]
 mod zeek_websocket {
     #[pymodule_export]
-    use super::{Event, Protocol, ProtocolBinding, Value, make_value};
+    use super::{
+        Event, Protocol, ProtocolBinding, Value,
+        asyncio::{Service, ZeekClient},
+        make_value,
+    };
 }

@@ -14,6 +14,7 @@ global pong: event(msg: string) &is_used;
 event ping(msg: string)
 	{
 	local evt = Cluster::make_event(pong, "ho!");
+	print "sending pong";
 	Cluster::publish(TOPIC, evt);
 	}
 

@@ -1,8 +1,69 @@
 import datetime
+from abc import abstractmethod
 from collections.abc import Mapping, Sequence
 from enum import Enum
 from ipaddress import IPv4Address, IPv6Address
 from typing import Annotated, TypeAlias, TypeVar
+
+class ZeekClient:
+    """Abstract base class to connect to the Zeek WebSocket API.
+
+    Users are expected to implement the following async methods:
+
+    ```python
+    async def connected(self, ack: dict[str, str]) -> None: ...
+    async def event(self, topic: str, event: Event) -> None: ...
+    async def error(self, error: str) -> None: ...
+    ```
+    """
+
+    @abstractmethod
+    async def connected(self, ack: dict[str, str]) -> None:
+        """Handle client subscription.
+
+        Async abstract method which must be implemented by derived classes.
+        """
+        ...
+
+    @abstractmethod
+    async def event(self, topic: str, event: Event) -> None:
+        """Handle a received event.
+
+        Async abstract method which must be implemented by derived classes.
+        """
+        ...
+
+    @abstractmethod
+    async def error(self, error: str) -> None:
+        """Handle a received error.
+
+        Async abstract method which must be implemented by derived classes.
+        """
+        ...
+
+    async def publish(self, topic: str, event: Event) -> None:
+        """Asynchronously send an event on the given topic.
+
+        Callers should `await` the result.
+        """
+        ...
+
+    def disconnect(self) -> None:
+        """Disconnect the client."""
+        ...
+
+class Service:
+    """A service wrapping a concrete `ZeekClient`."""
+
+    @staticmethod
+    async def run(
+        client: ZeekClient, app_name: str, endpoint: str, subscriptions: list[str]
+    ) -> None:
+        """Run a client as a service.
+
+        Callers should `await` the result.
+        """
+        ...
 
 class Event:
     """API representation of Zeek event."""

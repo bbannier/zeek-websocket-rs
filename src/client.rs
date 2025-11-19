@@ -260,6 +260,7 @@ impl<C: ZeekClient> Service<C> {
 /// checking it. Dropping the `Outbox` indicates to the `Service` that the client is done and will
 /// cause it to terminate, so clients should hold the `Outbox` for as long as they intend to stay
 /// connected, and explicitly `drop` it.
+#[derive(Clone)]
 pub struct Outbox(mpsc::Sender<(String, Event)>);
 
 impl Outbox {

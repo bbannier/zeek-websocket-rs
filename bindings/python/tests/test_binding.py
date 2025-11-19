@@ -5,6 +5,7 @@ import pytest
 import requests
 from fastapi import FastAPI, WebSocket
 from zeek_websocket import Client, Event, ProtocolBinding
+from zeek_websocket.zeek_websocket import Service, ZeekClient
 
 MOCK_SERVER = FastAPI()
 
@@ -138,3 +139,25 @@ def test_client(mock_server: str) -> None:
     my_event = Event("ping", (), ())
     client.publish(TOPIC, my_event)
     assert client.receive() == (TOPIC, my_event)
+
+
+@pytest.mark.asyncio
+async def test_async_client(mock_server: str) -> None:
+    class Client(ZeekClient):
+        pong_seen: bool = False
+
+        async def connected(self, ack: dict[str, str]) -> None:
+            print(ack)
+            await self.publish("/ping", Event("ping", ["hi"], ()))
+
+        async def event(self, topic: str, event: Event) -> None:
+            print(topic, event)
+            self.pong_seen = True
+            self.disconnect()
+
+        async def error(self, error: str) -> None:
+            raise NotImplementedError(error)
+
+    client = Client()
+    await Service.run(client, "client", mock_server, ["/ping"])
+    assert client.pong_seen

@@ -1,0 +1,177 @@
+use pyo3::{
+    exceptions::{PyNotImplementedError, PyRuntimeError, PyValueError},
+    prelude::*,
+    types::PyDict,
+};
+use pyo3_async_runtimes::tokio::{future_into_py, into_future};
+use pythonize::pythonize;
+
+use crate::python::Event;
+
+/// Abstract base class to connect to the Zeek WebSocket API.
+///
+/// Users are expected to implement the following async methods:
+///
+/// ```python
+/// async def connected(self, ack: dict[str, str]) -> None: ...
+/// async def event(self, topic: str, event: Event) -> None: ...
+/// async def error(self, error: str) -> None: ...
+/// ```
+#[derive(Clone)]
+#[pyclass(subclass)]
+pub struct ZeekClient {
+    outbox: Option<crate::client::Outbox>,
+}
+
+#[pymethods]
+impl ZeekClient {
+    #[new]
+    fn new() -> Self {
+        Self { outbox: None }
+    }
+
+    /// Disconnect the client.
+    fn disconnect(&mut self) {
+        self.outbox.take();
+    }
+
+    /// Asynchronously send an event on the given topic.
+    ///
+    /// Callers should `await` the result.
+    fn publish<'py>(
+        &mut self,
+        py: Python<'py>,
+        topic: String,
+        event: Event,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let outbox = self
+            .outbox
+            .clone()
+            .ok_or_else(|| PyRuntimeError::new_err("client is not connected"))?;
+
+        future_into_py(py, async move {
+            outbox
+                .send(topic, event.0)
+                .await
+                .map_err(|_e| PyRuntimeError::new_err("could not publish event"))?;
+            Ok(())
+        })
+    }
+
+    /// Callback to invoke when the client is subscribed.
+    ///
+    /// Async abstract method which must be implemented by derived classes.
+    #[allow(clippy::unused_self, clippy::needless_pass_by_value, unused_variables)]
+    fn connected(&self, py: Python, ack: Py<PyDict>) {
+        PyNotImplementedError::new_err("derived classes must implement `connected'").print(py);
+        panic!()
+    }
+
+    /// Callback to invoke when an event is received.
+    ///
+    /// Async abstract method which must be implemented by derived classes.
+    #[allow(clippy::unused_self, clippy::needless_pass_by_value, unused_variables)]
+    fn event(&self, py: Python, topic: String, event: Event) {
+        PyNotImplementedError::new_err("derived classes must implement `event'").print(py);
+        panic!()
+    }
+
+    /// Callback to invoke when an error is received.
+    ///
+    /// Async abstract method which must be implemented by derived classes.
+    #[allow(clippy::unused_self, clippy::needless_pass_by_value, unused_variables)]
+    fn error(&self, py: Python, error: String) {
+        PyNotImplementedError::new_err("derived classes must implement `error'").print(py);
+        panic!()
+    }
+}
+
+struct ZeekClientAdapter {
+    inner: Py<PyAny>,
+}
+
+macro_rules! call_async {
+    ($client:expr, $method:literal, $args:expr) => {
+        let _ = Python::attach(|py| {
+            let self_ = $client.inner.bind(py);
+
+            let x = match self_.call_method1($method, $args) {
+                Ok(x) => x,
+                Err(e) => {
+                    e.print(py);
+                    panic!();
+                }
+            };
+            match into_future(x) {
+                Ok(x) => x,
+                Err(e) => {
+                    e.print(py);
+                    panic!();
+                }
+            }
+        })
+        .await;
+    };
+}
+
+impl crate::client::ZeekClient for ZeekClientAdapter {
+    async fn connected(&mut self, ack: zeek_websocket_types::Message) {
+        let ack = Python::attach(|py| {
+            pythonize(py, &ack)
+                .expect("ACK should be convertible to JSON")
+                .unbind()
+        });
+        call_async!(self, "connected", (ack,));
+    }
+
+    async fn event(&mut self, topic: String, event: zeek_websocket_types::Event) {
+        call_async!(self, "event", (topic, Event(event)));
+    }
+
+    async fn error(&mut self, error: crate::protocol::ProtocolError) {
+        call_async!(self, "error", (error.to_string(),));
+    }
+}
+
+/// A service wrapping a concrete `ZeekClient`.
+#[pyclass]
+pub struct Service;
+
+#[pymethods]
+impl Service {
+    /// Run a client as a service.
+    ///
+    /// Callers should `await` the result.
+    #[staticmethod]
+    fn run<'py>(
+        py: Python<'py>,
+        client: Bound<ZeekClient>,
+        app_name: String,
+        endpoint: String,
+        subscriptions: Vec<String>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let endpoint = endpoint
+            .try_into()
+            .map_err(|e| PyValueError::new_err(format!("invalid uri: {e}")))?;
+
+        let mut x = client
+            .cast::<ZeekClient>()
+            .map_err(|e| PyRuntimeError::new_err(format!("invalid client: {e}")))?
+            .borrow_mut();
+
+        let service = crate::client::Service::new(|outbox| {
+            x.outbox = Some(outbox);
+            ZeekClientAdapter {
+                inner: client.into(),
+            }
+        });
+
+        future_into_py(py, async move {
+            service
+                .serve(app_name, endpoint, subscriptions)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            Ok(())
+        })
+    }
+}
