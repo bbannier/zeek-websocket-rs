@@ -408,10 +408,10 @@ impl Event {
     }
 }
 
+/// Sans-I/O wrapper for the Zeek WebSocket protocol.
 #[pyclass]
 struct ProtocolBinding(crate::protocol::Binding);
 
-/// Sans-I/O wrapper for the Zeek WebSocket protocol.
 #[pymethods]
 impl ProtocolBinding {
     #[new]

@@ -240,7 +240,7 @@ class Protocol(Enum):
     ICMP = 4
 
 class ProtocolBinding:
-    """Get the next incoming event."""
+    """Sans-I/O wrapper for the Zeek WebSocket protocol."""
 
     def __init__(self, subscriptions: Sequence[str]) -> None: ...
     def handle_incoming(self, data: bytes) -> None:
