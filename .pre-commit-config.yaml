@@ -74,3 +74,20 @@ repos:
     hooks:
       - id: cmake-format
       - id: cmake-lint
+
+  - repo: local
+    hooks:
+      - id: oxlint
+        name: oxlint
+        entry: oxlint
+        types_or: ["ts", "javascript"]
+        language: node
+        additional_dependencies:
+          - oxlint
+      - id: oxfmt
+        name: oxfmt
+        entry: oxfmt
+        types_or: ["ts", "javascript"]
+        language: node
+        additional_dependencies:
+          - oxfmt

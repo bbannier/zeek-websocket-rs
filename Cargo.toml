@@ -58,9 +58,14 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tokio-tungstenite = { workspace = true }
 tungstenite = { workspace = true, features = ["native-tls"] }
 
+[profile.release]
+lto = true
+strip = "symbols"
+
 [workspace]
 members = [
     "bindings/c/zeek-websocket-c",
+    "bindings/node/zeek-websocket-node",
     "crates/zeek-websocket-derive",
     "crates/zeek-websocket-types"
 ]

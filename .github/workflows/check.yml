@@ -87,6 +87,30 @@ jobs:
         with:
           source-dir: bindings/c/examples
 
+  node:
+    name: Node bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      - uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670
+        with:
+          channel: stable
+      - name: Install dependencies
+        run: |
+          cd bindings/node/zeek-websocket-node/ && npm i
+      - name: Build bindings
+        run: |
+          cd bindings/node/zeek-websocket-node/ && npm run build:debug
+      - name: Run tests
+        run: |
+          cd bindings/node/zeek-websocket-node/ && npm test
+
   pre-commit:
     name: Run pre-commit hooks
     runs-on: ubuntu-latest

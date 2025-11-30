@@ -9,7 +9,7 @@ use std::{
 use thiserror::Error;
 
 #[doc(no_inline)]
-pub use chrono::{NaiveDateTime, TimeDelta};
+pub use chrono::{DateTime, NaiveDateTime, TimeDelta};
 #[doc(no_inline)]
 pub use ipnetwork::IpNetwork;
 
