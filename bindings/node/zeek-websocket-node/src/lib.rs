@@ -1,3 +1,5 @@
+//! Node API for interacting with the Zeek WebSocket API.
+
 #![deny(clippy::all)]
 #![allow(dead_code)]
 
@@ -8,10 +10,14 @@ use napi_derive::napi;
 use thiserror::Error;
 use zeek_websocket::DateTime;
 
+/// Message type of the Zeek WebSocket API.
 #[napi]
 pub enum Message {
+    /// Ack sent by Zeek when a client was subscribed.
     Ack { endpoint: String, version: String },
+    /// Event sent over the Zeek API.
     Event { topic: String, event: Event },
+    /// Error sent over the Zeek API.
     Error { code: String, context: String },
 }
 
@@ -32,10 +38,14 @@ impl TryFrom<Message> for zeek_websocket::Message {
     }
 }
 
+/// A Zeek event.
 #[napi(object)]
 pub struct Event {
+    /// The name of the event.
     pub name: String,
+    /// Arguments passed to the event.
     pub args: Vec<Value>,
+    /// Metadata associated with the event.
     pub metadata: Vec<Value>,
 }
 
@@ -90,6 +100,7 @@ impl TryFrom<Event> for zeek_websocket::Event {
     }
 }
 
+/// Deserialize a given JSON payload to a [`Message`].
 #[napi]
 pub fn deserialize_json(json: String) -> napi::Result<Message> {
     let message: zeek_websocket::Message =
@@ -109,6 +120,7 @@ pub fn deserialize_json(json: String) -> napi::Result<Message> {
     })
 }
 
+/// Serialize a [`Message`] to JSON.
 #[napi]
 pub fn serialize_json(message: Message) -> napi::Result<String> {
     let value: zeek_websocket::Message = message.try_into()?;
@@ -116,6 +128,7 @@ pub fn serialize_json(message: Message) -> napi::Result<String> {
         .map_err(|e| Error::UnsupportedMessagePayload(e.to_string()))?)
 }
 
+/// A basic value sent over the Zeek API.
 #[napi]
 pub enum Value {
     None,
@@ -266,6 +279,7 @@ impl TryFrom<zeek_websocket::Value> for Value {
     }
 }
 
+/// Protocols understood by Zeek.
 #[napi]
 #[derive(Clone, Copy)]
 pub enum Protocol {
@@ -297,6 +311,7 @@ impl From<zeek_websocket::Protocol> for Protocol {
     }
 }
 
+/// Possible errors for the Node API.
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("value '{0}' not representable in Zeek")]
