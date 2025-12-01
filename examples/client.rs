@@ -9,7 +9,7 @@ struct Client {
 }
 
 impl ZeekClient for Client {
-    async fn connected(&mut self, _ack: zeek_websocket::Message) {
+    async fn connected(&mut self, _endpoint: String, _version: String) {
         // Once connected send a single echo event. The server will send the
         // event back to use.
         if let Some(sender) = &self.outbox {

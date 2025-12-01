@@ -114,7 +114,7 @@ impl Client {
                 (self.error_callback)(code, context.as_ptr());
             }
 
-            async fn connected(&mut self, _ack: zeek_websocket::Message) {
+            async fn connected(&mut self, _endpoint: String, _version: String) {
                 // Nothing.
             }
         }

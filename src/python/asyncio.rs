@@ -4,7 +4,6 @@ use pyo3::{
     types::PyDict,
 };
 use pyo3_async_runtimes::tokio::{future_into_py, into_future};
-use pythonize::pythonize;
 
 use crate::python::Event;
 
@@ -119,13 +118,8 @@ macro_rules! call_async {
 }
 
 impl crate::client::ZeekClient for ZeekClientAdapter {
-    async fn connected(&mut self, ack: zeek_websocket_types::Message) {
-        let ack = Python::attach(|py| {
-            pythonize(py, &ack)
-                .expect("ACK should be convertible to JSON")
-                .unbind()
-        });
-        call_async!(self, "connected", (ack,));
+    async fn connected(&mut self, endpoint: String, version: String) {
+        call_async!(self, "connected", (endpoint, version));
     }
 
     async fn event(&mut self, topic: String, event: zeek_websocket_types::Event) {

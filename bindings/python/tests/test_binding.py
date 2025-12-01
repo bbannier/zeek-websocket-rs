@@ -146,8 +146,8 @@ async def test_async_client(mock_server: str) -> None:
     class Client(ZeekClient):
         pong_seen: bool = False
 
-        async def connected(self, ack: dict[str, str]) -> None:
-            print(ack)
+        async def connected(self, endpoint: str, version: str) -> None:
+            print(endpoint, version)
             await self.publish("/ping", Event("ping", ["hi"], ()))
 
         async def event(self, topic: str, event: Event) -> None:

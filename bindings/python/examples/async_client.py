@@ -12,9 +12,9 @@ PING = Event("ping", ["hi"], [])
 class Client(ZeekClient):
     """Adapted client for the Zeek WebSocket API."""
 
-    async def connected(self, ack: dict[str, str]) -> None:
+    async def connected(self, endpoint: str, version: str) -> None:
         """Handle subscription ACK."""
-        print(ack)
+        print(endpoint, version)
 
         # Publish a ping to initiate the ping/pong loop below.
         await self.publish("/ping", PING)

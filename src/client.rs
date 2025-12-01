@@ -14,7 +14,7 @@
 //! }
 //!
 //! impl ZeekClient for Client {
-//!     async fn connected(&mut self, _ack: zeek_websocket::Message) {}
+//!     async fn connected(&mut self, _endpoint: String, _version: String) {}
 //!     async fn event(&mut self, _topic: String, _event: zeek_websocket::Event) {}
 //!     async fn error(&mut self, _error: zeek_websocket::protocol::ProtocolError) {}
 //! }
@@ -55,7 +55,7 @@
 //! };
 //!
 //! impl ZeekClient for Client {
-//!     async fn connected(&mut self, ack: Message) {
+//!     async fn connected(&mut self, endpoint: String, version: String) {
 //!         // Once connected send a single echo event. The server will send
 //!         // the event back to us.
 //!         if let Some(outbox) = &self.outbox {
@@ -183,7 +183,7 @@ impl<C: ZeekClient> Service<C> {
             stream.send(x.into()).await?;
         }
 
-        let ack = loop {
+        loop {
             let Some(ack) = stream.next().await else {
                 // The server closed the connection.
                 return Ok(());
@@ -193,9 +193,17 @@ impl<C: ZeekClient> Service<C> {
             if ack.is_ping() {
                 continue;
             }
-            break ack;
-        };
-        self.client.connected(ack.try_into()?).await;
+
+            match ack.try_into()? {
+                zeek_websocket_types::Message::Ack { endpoint, version } => {
+                    self.client.connected(endpoint, version).await;
+                    break;
+                }
+                message => {
+                    return Err(Error::Transport(format!("expected ACK, got '{message:?}'")))?;
+                }
+            }
+        }
 
         loop {
             tokio::select! {
@@ -303,7 +311,11 @@ impl Default for ServiceConfig {
 
 pub trait ZeekClient {
     /// Callback invoked when we have finished the handshake with the server.
-    fn connected(&mut self, ack: Message) -> impl std::future::Future<Output = ()> + Send;
+    fn connected(
+        &mut self,
+        endpoint: String,
+        version: String,
+    ) -> impl std::future::Future<Output = ()> + Send;
 
     /// Callback invoked when an event is received.
     fn event(
@@ -344,7 +356,7 @@ impl From<DeserializationError> for Error {
 #[cfg(test)]
 mod test {
     use tokio::sync::mpsc::{self};
-    use zeek_websocket_types::{Event, Message, Subscriptions};
+    use zeek_websocket_types::{Event, Subscriptions};
 
     use crate::{
         client::{Error, Outbox, Service, ZeekClient},
@@ -359,7 +371,7 @@ mod test {
         }
 
         impl ZeekClient for Client {
-            async fn connected(&mut self, _ack: Message) {}
+            async fn connected(&mut self, _endpoint: String, _version: String) {}
             async fn event(&mut self, _topic: String, _event: Event) {}
             async fn error(&mut self, _error: ProtocolError) {}
         }
@@ -395,7 +407,7 @@ mod test {
         }
 
         impl ZeekClient for C {
-            async fn connected(&mut self, _ack: Message) {
+            async fn connected(&mut self, _endpoint: String, _version: String) {
                 self._outbox
                     .send(TOPIC.into(), Event::new("echo", [42]))
                     .await

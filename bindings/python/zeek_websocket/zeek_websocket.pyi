@@ -18,7 +18,7 @@ class ZeekClient:
     """
 
     @abstractmethod
-    async def connected(self, ack: dict[str, str]) -> None:
+    async def connected(self, endpoint: str, version: str) -> None:
         """Handle client subscription.
 
         Async abstract method which must be implemented by derived classes.
