@@ -289,7 +289,7 @@ impl From<&ProtocolError> for ClientError {
 }
 
 /// An encoded event.
-pub struct Event(zeek_websocket::Event);
+pub struct Event(pub zeek_websocket::Event);
 
 impl Event {
     /// Create a new event.
@@ -352,7 +352,7 @@ impl Event {
 
 /// A type holding a Zeek WebSocket API value variant.
 #[derive(Clone, PartialEq)]
-pub struct Value(pub(crate) zeek_websocket::Value);
+pub struct Value(pub zeek_websocket::Value);
 
 impl Value {
     /// Returned value must be freed by caller with `zws_value_free`.
@@ -747,7 +747,7 @@ pub enum ValueType {
 }
 
 /// A list of encoded values.
-pub struct List(pub(crate) Vec<Value>);
+pub struct List(pub Vec<Value>);
 
 impl List {
     /// `values` ownership is passed to function.
@@ -792,7 +792,7 @@ impl List {
 }
 
 /// An encoded table.
-pub struct Table(pub(crate) Vec<(Value, Value)>);
+pub struct Table(pub Vec<(Value, Value)>);
 
 impl Table {
     /// Get the a list of keys in the table.
@@ -819,7 +819,7 @@ impl Table {
 }
 
 /// An encoded IP address.
-pub struct Address(pub(crate) IpAddr);
+pub struct Address(pub IpAddr);
 
 impl Address {
     /// Returned value must be freed by caller with `zws_address_free`.
@@ -870,8 +870,8 @@ impl Address {
 /// An encoded subnet.
 #[repr(C)]
 pub struct Subnet {
-    pub(crate) addr: Box<Address>,
-    pub(crate) prefix: u8,
+    pub addr: Box<Address>,
+    pub prefix: u8,
 }
 
 impl Subnet {
