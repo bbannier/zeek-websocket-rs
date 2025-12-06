@@ -4,7 +4,7 @@ use std::{
     ffi::{CStr, CString},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     num::NonZeroUsize,
-    ptr, slice,
+    slice,
     time::Duration,
 };
 
@@ -407,8 +407,12 @@ impl Value {
     ///
     /// * `data` must point to a valid, NULL-terminated UTF-8 string.
     #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn zws_value_new_string(data: *const libc::c_char) -> Option<Box<Self>> {
-        let data = unsafe { CStr::from_ptr(data) }.to_str().ok()?;
+    pub unsafe extern "C" fn zws_value_new_string(
+        data: *const libc::c_char,
+        len: usize,
+    ) -> Option<Box<Self>> {
+        let data = unsafe { slice::from_raw_parts(data as *const u8, len) };
+        let data = str::from_utf8(data).ok()?;
 
         Some(Box::new(Self(zeek_websocket::Value::String(
             data.to_string(),
@@ -421,8 +425,12 @@ impl Value {
     ///
     /// * `data` must point to a valid, NULL-terminated UTF-8 string.
     #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn zws_value_new_enum(data: *const libc::c_char) -> Option<Box<Self>> {
-        let data = unsafe { CStr::from_ptr(data) }.to_str().ok()?;
+    pub unsafe extern "C" fn zws_value_new_enum(
+        data: *const libc::c_char,
+        len: usize,
+    ) -> Option<Box<Self>> {
+        let data = unsafe { slice::from_raw_parts(data as *const u8, len) };
+        let data = str::from_utf8(data).ok()?;
         Some(Box::new(Self(zeek_websocket::Value::EnumValue(
             data.to_string(),
         ))))
@@ -587,21 +595,27 @@ impl Value {
         true
     }
 
+    /// If the value represents a string value set the pointer passed as second argument to it and
+    /// return the string size.
     #[unsafe(no_mangle)]
-    pub extern "C" fn zws_value_as_string(&self) -> *const u8 {
+    pub extern "C" fn zws_value_as_string(&self, result: &mut *const libc::c_char) -> usize {
         if let zeek_websocket::Value::String(x) = &self.0 {
-            x.as_ptr()
+            *result = x.as_ptr() as *const libc::c_char;
+            x.len()
         } else {
-            ptr::null()
+            Default::default()
         }
     }
 
+    /// If the value represents an enum value set the pointer passed as second argument to it and
+    /// return the string size.
     #[unsafe(no_mangle)]
-    pub extern "C" fn zws_value_as_enumvalue(&self) -> *const u8 {
+    pub extern "C" fn zws_value_as_enumvalue(&self, result: &mut *const libc::c_char) -> usize {
         if let zeek_websocket::Value::EnumValue(x) = &self.0 {
-            x.as_ptr()
+            *result = x.as_ptr() as *const libc::c_char;
+            x.len()
         } else {
-            ptr::null()
+            Default::default()
         }
     }
 

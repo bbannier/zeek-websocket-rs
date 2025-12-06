@@ -35,8 +35,9 @@ static void received(const char *topic, const zws_Event *event) {
     const auto *arg = zws_list_entry(args.get(), 0);
     assert(zws_value_type(arg) == ZWS_VALUE_TYPE_STRING);
 
-    const auto msg = std::string_view{
-        reinterpret_cast<const char *>(zws_value_as_string(arg))};
+    const char *msg = nullptr;
+    auto len = zws_value_as_string(arg, &msg);
+    assert(msg);
     std::cerr << "The server says: " << msg << '\n';
 
     should_terminate.count_down();
@@ -60,7 +61,8 @@ int main() {
   if (has_error)
     return 1;
 
-  auto args_ = std::array{zws_value_new_string("hi!")};
+  std::string_view msg = "hi!";
+  auto args_ = std::array{zws_value_new_string(msg.data(), msg.size())};
   List args = zws_list_new(args_.data(), args_.size());
 
   Event event = zws_event_new("ping", args.release(), nullptr);

@@ -23,7 +23,9 @@ static void received(const char *topic, const struct zws_Event *event) {
     const struct zws_Value *arg = zws_list_entry(args, 0);
     assert(zws_value_type(arg) == ZWS_VALUE_TYPE_STRING);
 
-    const uint8_t *msg = zws_value_as_string(arg);
+    const char *msg = NULL;
+    uintptr_t len = zws_value_as_string(arg, &msg);
+    assert(msg);
     printf("The server says: %s\n", msg);
 
     zws_list_free(args);
@@ -51,7 +53,8 @@ int main(void) {
       zws_client_new(app_name, uri, topics, NUM_TOPICS, received, error, NULL);
 
 #define NUM_ARGS 1
-  struct zws_Value *args_[NUM_ARGS] = {zws_value_new_string("hi!")};
+  const char *msg = "hi!";
+  struct zws_Value *args_[NUM_ARGS] = {zws_value_new_string(msg, strlen(msg))};
   struct zws_List *args = zws_list_new(args_, NUM_ARGS);
 
   struct zws_Event *event = zws_event_new("ping", args, NULL);
