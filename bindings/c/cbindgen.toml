@@ -1,5 +1,6 @@
 language = "C"
 cpp_compat = true
+include_guard = "ZEEK_WEBSOCKET_H"
 
 sys_includes = [
     "netinet/in.h",
