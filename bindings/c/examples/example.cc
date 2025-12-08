@@ -22,8 +22,7 @@ static std::atomic_bool has_error = false;
 static std::latch should_terminate{1};
 
 static void received(const char *topic, const zws_Event *event) {
-  const auto event_name =
-      std::string_view{reinterpret_cast<const char *>(zws_event_name(event))};
+  const auto event_name = std::string_view{zws_event_name(event)};
 
   std::cerr << "Received event " << event_name << " on topic " << topic << '\n';
 

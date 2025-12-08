@@ -11,11 +11,11 @@ static pthread_mutex_t has_error_mtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t should_terminate = PTHREAD_COND_INITIALIZER;
 
 static void received(const char *topic, const struct zws_Event *event) {
-  const uint8_t *event_name = zws_event_name(event);
+  const char *event_name = zws_event_name(event);
 
   printf("Received event %s on topic %s\n", zws_event_name(event), topic);
 
-  if (strcmp((const char *)event_name, "pong") == 0) {
+  if (strcmp(event_name, "pong") == 0) {
     struct zws_List *args = zws_event_args(event);
 
     assert(zws_list_size(args) == 1);

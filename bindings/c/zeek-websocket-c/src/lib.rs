@@ -331,8 +331,8 @@ impl Event {
     pub extern "C" fn zws_event_free(self: Box<Self>) {}
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn zws_event_name(&self) -> *const u8 {
-        self.0.name.as_ptr()
+    pub extern "C" fn zws_event_name(&self) -> *const libc::c_char {
+        self.0.name.as_ptr() as *const libc::c_char
     }
 
     /// Returned value must be freed by caller with `zws_list_free`.
