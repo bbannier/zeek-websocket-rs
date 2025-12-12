@@ -1,7 +1,7 @@
 {
   "name": "zeek-websocket",
   "version": "0.1.0",
-  "description": "Template project for writing node package with napi-rs",
+  "description": "Helpers for interacting with Zeek's websocket API",
   "main": "index.js",
   "repository": {
     "type": "git",
@@ -49,11 +49,11 @@
     "access": "public"
   },
   "scripts": {
-    "build": "napi build --platform --release",
-    "build:debug": "napi build --platform",
+    "build": "napi build --platform --release --manifest-path bindings/node/zeek-websocket-node/Cargo.toml",
+    "build:debug": "napi build --platform --manifest-path bindings/node/zeek-websocket-node/Cargo.toml",
     "prepublishOnly": "napi prepublish -t npm",
     "test": "ava",
-    "preversion": "napi build --platform && git add .",
+    "preversion": "napi build --platform  --manifest-path bindings/node/zeek-websocket-node/Cargo.toml && git add .",
     "version": "napi version"
   },
   "devDependencies": {
@@ -78,6 +78,9 @@
     ]
   },
   "ava": {
+    "files": [
+      "bindings/node/zeek-websocket-node/__test__/**/*"
+    ],
     "extensions": {
       "ts": "module"
     },
