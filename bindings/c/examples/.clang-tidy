@@ -1,6 +1,6 @@
 # Copyright (c) 2020-now by the Zeek Project. See LICENSE for details.
 ---
-Checks: "
+Checks: '
   bugprone-*,
   -bugprone-easily-swappable-parameters,
   -bugprone-exception-escape,
@@ -71,7 +71,7 @@ Checks: "
   -readability-identifier-length,
   -readability-implicit-bool-conversion,
   -readability-use-concise-preprocessor-directives,
-  "
+  '
 
 HeaderFilterRegex: '(hilti|spicy)/[a-zA-Z-]+/include/([a-zA-Z-]+/)*[a-zA-Z-]+\.h'
-WarningsAsErrors: "*"
+WarningsAsErrors: '*'

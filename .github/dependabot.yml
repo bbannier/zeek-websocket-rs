@@ -1,14 +1,14 @@
 version: 2
 updates:
-  - package-ecosystem: "cargo" # See documentation for possible values
-    directory: "/"
+  - package-ecosystem: 'cargo' # See documentation for possible values
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
     cooldown:
       default-days: 7
-  - package-ecosystem: "github-actions" # See documentation for possible values
-    directory: "/"
+  - package-ecosystem: 'github-actions' # See documentation for possible values
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
     cooldown:
       default-days: 7

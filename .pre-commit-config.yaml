@@ -4,9 +4,9 @@ repos:
     hooks:
       - id: fmt
       - id: clippy
-        args: ["--all", "--all-features", "--workspace"]
+        args: ['--all', '--all-features', '--workspace']
       - id: cargo-check
-        args: ["--all", "--all-features", "--workspace"]
+        args: ['--all', '--all-features', '--workspace']
   - repo: https://github.com/jorisroovers/gitlint
     rev: v0.19.1
     hooks:
@@ -30,6 +30,7 @@ repos:
     rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
+        exclude: ".*[js|ts]"
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.9
     hooks:
@@ -68,7 +69,7 @@ repos:
     rev: v21.1.6
     hooks:
       - id: clang-format
-        types_or: ["c", "c++"]
+        types_or: ['c', 'c++']
   - repo: https://github.com/cheshirekow/cmake-format-precommit
     rev: v0.6.13
     hooks:
@@ -80,14 +81,14 @@ repos:
       - id: oxlint
         name: oxlint
         entry: oxlint
-        types_or: ["ts", "javascript"]
+        types_or: ['ts', 'javascript']
         language: node
         additional_dependencies:
           - oxlint
       - id: oxfmt
         name: oxfmt
         entry: oxfmt
-        types_or: ["ts", "javascript"]
+        types_or: ['ts', 'javascript']
         language: node
         additional_dependencies:
           - oxfmt
