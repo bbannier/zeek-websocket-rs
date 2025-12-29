@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 
+use time::{OffsetDateTime, PrimitiveDateTime, UtcOffset};
 use tokio::{runtime::Runtime, task::JoinHandle};
 use zeek_websocket::{
     IpNetwork,
@@ -389,16 +390,28 @@ impl Value {
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_new_timespan(nanos: i64) -> Box<Self> {
         Box::new(Self(zeek_websocket::Value::Timespan(
-            zeek_websocket::TimeDelta::nanoseconds(nanos),
+            zeek_websocket::Duration::nanoseconds(nanos),
         )))
     }
 
     /// Returned value must be freed by caller with `zws_value_free`.
     #[unsafe(no_mangle)]
-    pub extern "C" fn zws_value_new_timestamp(nanos_utc: i64) -> Box<Self> {
-        Box::new(Self(zeek_websocket::Value::Timestamp(
-            chrono::DateTime::from_timestamp_nanos(nanos_utc).naive_utc(),
-        )))
+    pub extern "C" fn zws_value_new_timestamp(nanos_utc: i64) -> Option<Box<Self>> {
+        let Ok(time) = OffsetDateTime::from_unix_timestamp_nanos(nanos_utc.into()) else {
+            // This shouldn't really ever happen since all i64 nanos timestamps should be
+            // representable.
+            return None;
+        };
+
+        // API values are in local TZ offset.
+        let Ok(offset) = UtcOffset::current_local_offset() else {
+            return None;
+        };
+        let time = time.replace_offset(offset);
+
+        Some(Box::new(Self(zeek_websocket::Value::Timestamp(
+            PrimitiveDateTime::new(time.date(), time.time()),
+        ))))
     }
 
     /// Returned value must be freed by caller with `zws_value_free`.
@@ -582,7 +595,11 @@ impl Value {
         let zeek_websocket::Value::Timespan(x) = &self.0 else {
             return false;
         };
-        *result = x.num_nanoseconds().unwrap_or_default();
+        let Ok(nanos) = x.whole_nanoseconds().try_into() else {
+            // This shouldn't trigger since Zeek only supports i64 intervals.
+            return false;
+        };
+        *result = nanos;
         true
     }
 
@@ -591,7 +608,15 @@ impl Value {
         let zeek_websocket::Value::Timestamp(x) = &self.0 else {
             return false;
         };
-        *result = x.and_utc().timestamp_nanos_opt().unwrap_or_default();
+        let Ok(offset) = UtcOffset::current_local_offset() else {
+            return false;
+        };
+        let time = x.assume_offset(offset);
+        let Ok(nanos) = time.unix_timestamp_nanos().try_into() else {
+            // This shouldn't trigger since Zeek only supports i64 timestamps.
+            return false;
+        };
+        *result = nanos;
         true
     }
 

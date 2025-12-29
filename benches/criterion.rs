@@ -4,15 +4,15 @@ use std::{
     path::Path,
     process::{Command, Stdio},
     thread::sleep,
-    time::Duration,
 };
 
 use criterion::*;
 use ipnetwork::Ipv4Network;
+use time::{Date, Duration, Time};
 use tungstenite::{client::IntoClientRequest, connect};
 use zeek_websocket::{
-    Data, Event, Message, Subscriptions,
-    types::{IpNetwork, NaiveDateTime, Port, Protocol, TimeDelta, Value},
+    Data, Event, Message, PrimitiveDateTime, Subscriptions,
+    types::{IpNetwork, Port, Protocol, Value},
 };
 
 fn serialize(c: &mut Criterion) {
@@ -35,11 +35,14 @@ fn serialize(c: &mut Criterion) {
         b.iter(|| serde_json::to_string(&Value::from(f64::default())))
     });
     group.bench_function("timespan", |b| {
-        let timespan = TimeDelta::default();
+        let timespan = Duration::new(1234, 4567);
         b.iter(|| serde_json::to_string(&Value::from(timespan)))
     });
     group.bench_function("timestamp", |b| {
-        let timestamp = NaiveDateTime::default();
+        let timestamp = PrimitiveDateTime::new(
+            Date::from_calendar_date(2000, time::Month::April, 1).unwrap(),
+            Time::from_hms(1, 2, 3).unwrap(),
+        );
         b.iter(|| serde_json::to_string(&Value::from(timestamp)))
     });
     group.bench_function("string", |b| {
@@ -111,7 +114,7 @@ fn zeek_roundtrip(c: &mut Criterion) {
             .unwrap();
 
         // Wait a little to give Zeek process time to start up.
-        sleep(Duration::from_secs(1));
+        sleep(std::time::Duration::from_secs(1));
 
         let request = "ws://127.0.0.1:8080/v1/messages/json"
             .into_client_request()

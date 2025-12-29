@@ -8,7 +8,7 @@ use std::{net::IpAddr, str::FromStr};
 use napi::bindgen_prelude::{BigInt, Buffer, BufferSlice};
 use napi_derive::napi;
 use thiserror::Error;
-use zeek_websocket::DateTime;
+use time::{OffsetDateTime, UtcOffset};
 
 /// Message type of the Zeek WebSocket API.
 #[napi]
@@ -171,14 +171,22 @@ impl TryFrom<Value> for zeek_websocket::Value {
                 let secs = (nanos_ / 1e9).trunc();
                 let nanos_ = nanos_ - secs * 1e9;
 
-                zeek_websocket::Value::Timespan(
-                    zeek_websocket::TimeDelta::new(secs as i64, nanos_ as u32)
-                        .ok_or_else(|| Error::NotRespresentable(nanos.to_string()))?,
-                )
+                zeek_websocket::Value::Timespan(zeek_websocket::Duration::new(
+                    secs as i64,
+                    nanos_ as i32,
+                ))
             }
-            Value::Timestamp { nanos } => zeek_websocket::Value::Timestamp(
-                DateTime::from_timestamp_nanos(nanos).naive_local(),
-            ),
+            Value::Timestamp { nanos } => {
+                let offset = UtcOffset::current_local_offset()
+                    .map_err(|e| Error::UnknownLocalTzOffset(e.to_string()))?;
+                let time = OffsetDateTime::from_unix_timestamp_nanos(nanos.into())
+                    .map_err(|e| Error::ComponentRange(e.to_string()))?
+                    .replace_offset(offset);
+                zeek_websocket::Value::Timestamp(zeek_websocket::PrimitiveDateTime::new(
+                    time.date(),
+                    time.time(),
+                ))
+            }
             Value::Vector { value } => zeek_websocket::Value::Vector(
                 value
                     .into_iter()
@@ -262,16 +270,19 @@ impl TryFrom<zeek_websocket::Value> for Value {
             },
             zeek_websocket::Value::Timespan(dt) => {
                 let nanos = dt
-                    .num_nanoseconds()
-                    .ok_or_else(|| Error::NotRespresentable(format!("{dt}")))?;
+                    .whole_nanoseconds()
+                    .try_into()
+                    .map_err(|_| Error::NotRespresentable(format!("{dt}")))?;
 
                 Value::Timespan { nanos }
             }
             zeek_websocket::Value::Timestamp(t) => {
-                let nanos = t
-                    .and_utc()
-                    .timestamp_nanos_opt()
-                    .ok_or_else(|| Error::NotRespresentable(format!("{t}")))?;
+                let offset = UtcOffset::current_local_offset()
+                    .map_err(|e| Error::UnknownLocalTzOffset(e.to_string()))?;
+                let nanos = OffsetDateTime::new_in_offset(t.date(), t.time(), offset)
+                    .unix_timestamp_nanos()
+                    .try_into()
+                    .map_err(|_| Error::NotRespresentable(format!("{t}")))?;
 
                 Value::Timestamp { nanos }
             }
@@ -325,6 +336,12 @@ pub enum Error {
 
     #[error("receive failed: {0}")]
     ReceiveFailed(String),
+
+    #[error("could not determine local timezone offset: {0}")]
+    UnknownLocalTzOffset(String),
+
+    #[error("value out of range")]
+    ComponentRange(String),
 }
 
 impl From<Error> for napi::Error {
@@ -332,6 +349,8 @@ impl From<Error> for napi::Error {
         match value {
             Error::NotRespresentable(error)
             | Error::ReceiveFailed(error)
+            | Error::UnknownLocalTzOffset(error)
+            | Error::ComponentRange(error)
             | Error::HandlingFailed(error)
             | Error::UnsupportedMessagePayload(error) => Self::from_reason(error),
         }

@@ -7,7 +7,7 @@ edition = "2024"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
-chrono = { workspace = true }
+time = { workspace = true }
 futures-util = { workspace = true }
 libc = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }

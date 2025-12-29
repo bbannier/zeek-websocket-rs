@@ -9,9 +9,9 @@ use std::{
 use thiserror::Error;
 
 #[doc(no_inline)]
-pub use chrono::{DateTime, NaiveDateTime, TimeDelta};
-#[doc(no_inline)]
 pub use ipnetwork::IpNetwork;
+#[doc(no_inline)]
+pub use time::{Duration, PrimitiveDateTime};
 
 /// Enum for all basic types understood by Zeek's WebSocket API.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -23,9 +23,9 @@ pub enum Value {
     Integer(i64),
     Real(f64),
     #[serde(with = "timespan")]
-    Timespan(TimeDelta),
+    Timespan(Duration),
     #[serde(with = "timestamp")]
-    Timestamp(NaiveDateTime),
+    Timestamp(PrimitiveDateTime),
     String(String),
     #[serde(rename = "enum-value")]
     EnumValue(String),
@@ -77,8 +77,8 @@ impl_T!(i16, Value::Integer);
 impl_T!(i8, Value::Integer);
 impl_T!(f64, Value::Real);
 impl_from_T!(f32, Value::Real);
-impl_T!(TimeDelta, Value::Timespan);
-impl_T!(NaiveDateTime, Value::Timestamp);
+impl_T!(Duration, Value::Timespan);
+impl_T!(PrimitiveDateTime, Value::Timestamp);
 impl_T!(String, Value::String);
 impl_from_T!(&str, Value::String);
 impl_T!(IpAddr, Value::Address);
@@ -245,30 +245,35 @@ pub enum Protocol {
 }
 
 mod timestamp {
-    use super::ParseError;
-    use chrono::NaiveDateTime;
-    use serde::{Deserialize, de};
-    use std::str::FromStr;
+    use serde::Deserialize;
+    use time::{
+        PrimitiveDateTime, format_description::BorrowedFormatItem, macros::format_description,
+    };
 
-    pub fn serialize<S>(timestamp: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error>
+    const FORMAT: &[BorrowedFormatItem<'_>] =
+        format_description!("[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond]");
+
+    pub fn serialize<S>(timestamp: &PrimitiveDateTime, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let date = timestamp.date();
-        let time = timestamp.time();
+        use serde::ser::Error;
+        let x = timestamp.format(FORMAT).map_err(S::Error::custom)?;
 
-        serializer.serialize_str(&format!("{date}T{time}"))
+        // FIXME(bbannier): use well-known format.
+        serializer.serialize_str(&x)
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<PrimitiveDateTime, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let s = <String>::deserialize(deserializer)?;
-        NaiveDateTime::from_str(&s).map_err(|e| {
-            use de::Error;
-            D::Error::custom(ParseError::InvalidTimestamp(e.to_string()))
-        })
+        use serde::de::Error;
+        let s = String::deserialize(deserializer)?;
+
+        let time = PrimitiveDateTime::parse(dbg!(&s), FORMAT).map_err(D::Error::custom)?;
+
+        Ok(time)
     }
 }
 
@@ -276,9 +281,9 @@ mod timespan {
     #![allow(clippy::missing_errors_doc)]
 
     use super::{ParseError, SerializationError};
-    use chrono::TimeDelta;
     use serde::{Deserialize, de, ser::Error};
     use std::str::FromStr;
+    use time::Duration;
 
     enum Unit {
         NS,
@@ -305,19 +310,19 @@ mod timespan {
         }
     }
 
-    pub fn serialize<S>(duration: &TimeDelta, serializer: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         // If we only store seconds format as a seconds value.
-        if duration.subsec_nanos() == 0 {
-            return serializer.serialize_str(&format!("{}s", duration.num_seconds()));
+        if duration.subsec_nanoseconds() == 0 {
+            return serializer.serialize_str(&format!("{}s", duration.whole_seconds()));
         }
 
         // We have nanoseconds. Since a `timespace` can only represent integer values we must
         // represent the duration as an `i64` of nanos. Should the number of nanos exceed the range
         // of `i64` the value is not representable.
-        let num_nanos = duration.num_nanoseconds().ok_or_else(|| {
+        let num_nanos: i64 = duration.whole_nanoseconds().try_into().map_err(|_| {
             S::Error::custom(SerializationError::NotRepresentable(format!(
                 "'{duration}' needs nanosecond accuracy but exceeds its range"
             )))
@@ -325,7 +330,7 @@ mod timespan {
         serializer.serialize_str(&format!("{num_nanos}ns"))
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<TimeDelta, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -351,12 +356,12 @@ mod timespan {
             .map_err(|_| de::Error::custom(ParseError::InvalidTimespanUnit(unit.into())))?;
 
         Ok(match unit {
-            Unit::NS => TimeDelta::nanoseconds(num),
-            Unit::MS => TimeDelta::milliseconds(num),
-            Unit::S => TimeDelta::seconds(num),
-            Unit::Min => TimeDelta::minutes(num),
-            Unit::H => TimeDelta::hours(num),
-            Unit::D => TimeDelta::days(num),
+            Unit::NS => Duration::nanoseconds(num),
+            Unit::MS => Duration::milliseconds(num),
+            Unit::S => Duration::seconds(num),
+            Unit::Min => Duration::minutes(num),
+            Unit::H => Duration::hours(num),
+            Unit::D => Duration::days(num),
         })
     }
 }
@@ -671,9 +676,9 @@ mod test {
     use crate::{
         ConversionError, Data, Event, Message, ParseError, Port, Protocol, TableEntry, Value,
     };
-    use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeDelta};
     use ipnetwork::IpNetwork;
     use serde_json::json;
+    use time::{Date, Duration, PrimitiveDateTime, Time};
 
     #[cfg(feature = "tungstenite")]
     use {
@@ -790,14 +795,17 @@ mod test {
             serde_json::from_value(json!({"@data-type": "real", "data": 7.5})).unwrap()
         );
         assert_eq!(
-            Value::from(TimeDelta::milliseconds(1500)),
+            Value::from(Duration::milliseconds(1500)),
             serde_json::from_value(json!({"@data-type": "timespan", "data": "1500ms"})).unwrap()
         );
         assert_eq!(
-            Value::from("2022-04-10T07:00:00.000".parse::<NaiveDateTime>().unwrap()),
-            serde_json::from_value(
+            Value::from(PrimitiveDateTime::new(
+                Date::from_calendar_date(2022, time::Month::April, 10).unwrap(),
+                Time::from_hms(7, 0, 0).unwrap(),
+            )),
+            dbg!(serde_json::from_value(
                 json!({"@data-type": "timestamp", "data": "2022-04-10T07:00:00.000"})
-            )
+            ))
             .unwrap()
         );
         assert_eq!(
@@ -906,13 +914,14 @@ mod test {
         assert_eq!(Value::from(0.).try_into(), Ok(0.));
 
         assert_eq!(
-            Value::from(TimeDelta::seconds(1)).try_into(),
-            Ok(TimeDelta::seconds(1))
+            Value::from(Duration::seconds(1)).try_into(),
+            Ok(Duration::seconds(1))
         );
-        assert_eq!(
-            Value::from(NaiveDateTime::default()).try_into(),
-            Ok(NaiveDateTime::default())
+        let time = PrimitiveDateTime::new(
+            Date::from_calendar_date(2022, time::Month::April, 10).unwrap(),
+            Time::from_hms(0, 0, 0).unwrap(),
         );
+        assert_eq!(Value::from(time).try_into(), Ok(time));
 
         let addr = IpAddr::from_str("::0").unwrap();
         assert_eq!(Value::from(addr).try_into(), Ok(addr));
@@ -1016,38 +1025,38 @@ mod test {
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "1ns" }))
                 .unwrap(),
-            Value::from(TimeDelta::nanoseconds(1))
+            Value::from(Duration::nanoseconds(1))
         );
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "1ms" }))
                 .unwrap(),
-            Value::from(TimeDelta::milliseconds(1))
+            Value::from(Duration::milliseconds(1))
         );
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "1s" }))
                 .unwrap(),
-            Value::from(TimeDelta::seconds(1))
+            Value::from(Duration::seconds(1))
         );
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "1min" }))
                 .unwrap(),
-            Value::from(TimeDelta::minutes(1))
+            Value::from(Duration::minutes(1))
         );
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "1h" }))
                 .unwrap(),
-            Value::from(TimeDelta::hours(1))
+            Value::from(Duration::hours(1))
         );
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "1d" }))
                 .unwrap(),
-            Value::from(TimeDelta::days(1))
+            Value::from(Duration::days(1))
         );
 
         assert_eq!(
             serde_json::from_value::<Value>(json!({ "@data-type": "timespan", "data": "-42s" }))
                 .unwrap(),
-            Value::from(TimeDelta::seconds(-42))
+            Value::from(Duration::seconds(-42))
         );
 
         assert_eq!(
@@ -1066,29 +1075,29 @@ mod test {
         );
 
         assert_eq!(
-            serde_json::to_string(&Value::from(TimeDelta::nanoseconds(12))).unwrap(),
+            serde_json::to_string(&Value::from(Duration::nanoseconds(12))).unwrap(),
             serde_json::to_string(&json!({"@data-type": "timespan", "data": "12ns"})).unwrap()
         );
         assert_eq!(
-            serde_json::to_string(&Value::from(TimeDelta::seconds(12))).unwrap(),
+            serde_json::to_string(&Value::from(Duration::seconds(12))).unwrap(),
             serde_json::to_string(&json!({"@data-type": "timespan", "data": "12s"})).unwrap()
         );
         assert_eq!(
             serde_json::to_string(&Value::from(
-                TimeDelta::weeks(52 * 100_000_000) + TimeDelta::nanoseconds(1)
+                Duration::weeks(52 * 100_000_000) + Duration::nanoseconds(1)
             ))
             .err()
             .unwrap()
             .to_string(),
-            "value not representable: 'PT3144960000000000.000000001S' needs nanosecond accuracy but exceeds its range"
+            "value not representable: '36400000000d1ns' needs nanosecond accuracy but exceeds its range"
         );
     }
 
     #[test]
     fn timestamp() {
-        let value = Value::from(NaiveDateTime::new(
-            NaiveDate::from_ymd_opt(2014, 8, 12).unwrap(),
-            NaiveTime::from_hms_nano_opt(1, 2, 3, 4).unwrap(),
+        let value = Value::from(PrimitiveDateTime::new(
+            Date::from_calendar_date(2014, time::Month::August, 12).unwrap(),
+            Time::from_hms_nano(1, 2, 3, 4).unwrap(),
         ));
 
         let json = json!(
@@ -1109,7 +1118,7 @@ mod test {
             .err()
             .unwrap()
             .to_string(),
-            "invalid timestamp: input is out of range"
+            "the 'month' component could not be parsed"
         );
     }
 }

@@ -195,10 +195,11 @@ def test_str() -> None:
     assert str(Value.Subnet("127.0.0.1", 8)) == "Subnet(127.0.0.1, 8)"
     assert (
         str(Value.Timespan(timedelta(seconds=0.5)))
-        == "Timespan(TimeDelta { secs: 0, nanos: 500000000 })"
+        == "Timespan(Duration { seconds: 0, nanoseconds: 500000000 })"
     )
     assert (
-        str(Value.Timestamp(datetime(2000, 10, 2))) == "Timestamp(2000-10-02T00:00:00)"
+        str(Value.Timestamp(datetime(2000, 10, 2, 13, 14, 15, 16)))
+        == "Timestamp(2000-10-02 13:14:15.000016)"
     )
     assert str(Value.None_()) == "None_"
     assert str(Value.String("abc")) == 'String("abc")'
