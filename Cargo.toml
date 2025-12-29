@@ -74,21 +74,23 @@ members = [
 [workspace.dependencies]
 anyhow = { version = "1.0.100", default-features = false }
 time = { version = "0.3.44" }
-criterion = { version = "4.1.0", default-features = false, features = ["async_tokio", "html_reports", "plotters"], package = "codspeed-criterion-compat" }
+criterion = { version = "4.2.0", default-features = false, features = ["async_tokio", "html_reports", "plotters"], package = "codspeed-criterion-compat" }
 document-features = { version = "0.2.12", features = ["default"], default-features = false }
 futures-util = { version = "0.3.31", default-features = false }
 ipnetwork = { version = "0.21.1", default-features = false }
-libc = { version = "0.2.177" }
+libc = { version = "0.2.178" }
+napi = { version = "3.0.0" }
+napi-derive = "3.0.0"
 ordered-float = {version = "5.1.0", default-features = false }
 proc-macro-error2 = { version = "2.0.1", default-features = false }
-proc-macro2 = { version = "1.0.103", default-features = false }
-pyo3 = { version = "0.27.1", features = ["time", "ordered-float"] }
+proc-macro2 = { version = "1.0.104", default-features = false }
+pyo3 = { version = "0.27.2", features = ["time", "ordered-float"] }
 pyo3-async-runtimes = { version = "0.27.0", features = ["tokio-runtime"] }
 pythonize = "0.27.0"
 quote = { version = "1.0.42", default-features = false }
 serde = { version = "1.0.228", default-features = false }
-serde_json = { version = "1.0.145", features = ["std"], default-features = false }
-syn = { version = "2.0.110", features = ["derive", "proc-macro"], default-features = false }
+serde_json = { version = "1.0.148", features = ["std"], default-features = false }
+syn = { version = "2.0.111", features = ["derive", "proc-macro"], default-features = false }
 thiserror = { version = "2.0.17", default-features = false }
 tokio = { version = "1.48.0", default-features = false }
 tokio-tungstenite = { version = "0.28.0", features = ["connect"], default-features = false }
