@@ -11,7 +11,7 @@ use thiserror::Error;
 #[doc(no_inline)]
 pub use ipnetwork::IpNetwork;
 #[doc(no_inline)]
-pub use time::{Duration, PrimitiveDateTime};
+pub use time::{Duration, OffsetDateTime};
 
 /// Enum for all basic types understood by Zeek's WebSocket API.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -25,7 +25,7 @@ pub enum Value {
     #[serde(with = "timespan")]
     Timespan(Duration),
     #[serde(with = "timestamp")]
-    Timestamp(PrimitiveDateTime),
+    Timestamp(OffsetDateTime),
     String(String),
     #[serde(rename = "enum-value")]
     EnumValue(String),
@@ -78,7 +78,7 @@ impl_T!(i8, Value::Integer);
 impl_T!(f64, Value::Real);
 impl_from_T!(f32, Value::Real);
 impl_T!(Duration, Value::Timespan);
-impl_T!(PrimitiveDateTime, Value::Timestamp);
+impl_T!(OffsetDateTime, Value::Timestamp);
 impl_T!(String, Value::String);
 impl_from_T!(&str, Value::String);
 impl_T!(IpAddr, Value::Address);
@@ -247,24 +247,31 @@ pub enum Protocol {
 mod timestamp {
     use serde::Deserialize;
     use time::{
-        PrimitiveDateTime, format_description::BorrowedFormatItem, macros::format_description,
+        OffsetDateTime, PrimitiveDateTime, UtcOffset, format_description::BorrowedFormatItem,
+        macros::format_description,
     };
 
     const FORMAT: &[BorrowedFormatItem<'_>] =
         format_description!("[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond]");
 
-    pub fn serialize<S>(timestamp: &PrimitiveDateTime, serializer: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(timestamp: &OffsetDateTime, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         use serde::ser::Error;
+
+        // Timestamps are serialized in local time.
+        let offset = UtcOffset::current_local_offset().map_err(S::Error::custom)?;
+        let timestamp = timestamp.to_offset(offset);
+
+        let timestamp = PrimitiveDateTime::new(timestamp.date(), timestamp.time());
+
         let x = timestamp.format(FORMAT).map_err(S::Error::custom)?;
 
-        // FIXME(bbannier): use well-known format.
         serializer.serialize_str(&x)
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<PrimitiveDateTime, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -272,6 +279,9 @@ mod timestamp {
         let s = String::deserialize(deserializer)?;
 
         let time = PrimitiveDateTime::parse(dbg!(&s), FORMAT).map_err(D::Error::custom)?;
+
+        let offset = UtcOffset::current_local_offset().map_err(D::Error::custom)?;
+        let time = time.assume_offset(offset);
 
         Ok(time)
     }
@@ -678,7 +688,7 @@ mod test {
     };
     use ipnetwork::IpNetwork;
     use serde_json::json;
-    use time::{Date, Duration, PrimitiveDateTime, Time};
+    use time::{Date, Duration, OffsetDateTime, Time, UtcOffset};
 
     #[cfg(feature = "tungstenite")]
     use {
@@ -799,13 +809,17 @@ mod test {
             serde_json::from_value(json!({"@data-type": "timespan", "data": "1500ms"})).unwrap()
         );
         assert_eq!(
-            Value::from(PrimitiveDateTime::new(
-                Date::from_calendar_date(2022, time::Month::April, 10).unwrap(),
-                Time::from_hms(7, 0, 0).unwrap(),
-            )),
-            dbg!(serde_json::from_value(
+            Value::from({
+                // Change the offset to the local offset since Zeek interprets timestamps in local time.
+                OffsetDateTime::new_in_offset(
+                    Date::from_calendar_date(2022, time::Month::April, 10).unwrap(),
+                    Time::from_hms(7, 0, 0).unwrap(),
+                    UtcOffset::current_local_offset().unwrap(),
+                )
+            }),
+            serde_json::from_value(
                 json!({"@data-type": "timestamp", "data": "2022-04-10T07:00:00.000"})
-            ))
+            )
             .unwrap()
         );
         assert_eq!(
@@ -917,7 +931,7 @@ mod test {
             Value::from(Duration::seconds(1)).try_into(),
             Ok(Duration::seconds(1))
         );
-        let time = PrimitiveDateTime::new(
+        let time = OffsetDateTime::new_utc(
             Date::from_calendar_date(2022, time::Month::April, 10).unwrap(),
             Time::from_hms(0, 0, 0).unwrap(),
         );
@@ -1095,9 +1109,10 @@ mod test {
 
     #[test]
     fn timestamp() {
-        let value = Value::from(PrimitiveDateTime::new(
+        let value = Value::from(OffsetDateTime::new_in_offset(
             Date::from_calendar_date(2014, time::Month::August, 12).unwrap(),
             Time::from_hms_nano(1, 2, 3, 4).unwrap(),
+            UtcOffset::current_local_offset().unwrap(),
         ));
 
         let json = json!(

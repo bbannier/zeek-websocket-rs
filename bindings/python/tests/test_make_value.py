@@ -1,7 +1,7 @@
 import dataclasses
 import enum
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from ipaddress import IPv4Address
 
 import pytest
@@ -117,9 +117,9 @@ def test_timespan() -> None:
 
 
 def test_timestamp() -> None:
-    x = make_value(datetime(year=2000, month=1, day=2))
+    x = make_value(datetime(year=2000, month=1, day=2, tzinfo=timezone.utc))
     assert isinstance(x, Value.Timestamp)
-    assert x.value == datetime(year=2000, month=1, day=2)
+    assert x.value == datetime(year=2000, month=1, day=2, tzinfo=timezone.utc)
 
 
 def test_vector() -> None:
@@ -198,8 +198,8 @@ def test_str() -> None:
         == "Timespan(Duration { seconds: 0, nanoseconds: 500000000 })"
     )
     assert (
-        str(Value.Timestamp(datetime(2000, 10, 2, 13, 14, 15, 16)))
-        == "Timestamp(2000-10-02 13:14:15.000016)"
+        str(Value.Timestamp(datetime(2000, 10, 2, 13, 14, 15, 16, timezone.utc)))
+        == "Timestamp(2000-10-02 13:14:15.000016 +00:00:00)"
     )
     assert str(Value.None_()) == "None_"
     assert str(Value.String("abc")) == 'String("abc")'

@@ -11,7 +11,7 @@ use ipnetwork::Ipv4Network;
 use time::{Date, Duration, Time};
 use tungstenite::{client::IntoClientRequest, connect};
 use zeek_websocket::{
-    Data, Event, Message, PrimitiveDateTime, Subscriptions,
+    Data, Event, Message, OffsetDateTime, Subscriptions,
     types::{IpNetwork, Port, Protocol, Value},
 };
 
@@ -39,7 +39,7 @@ fn serialize(c: &mut Criterion) {
         b.iter(|| serde_json::to_string(&Value::from(timespan)))
     });
     group.bench_function("timestamp", |b| {
-        let timestamp = PrimitiveDateTime::new(
+        let timestamp = OffsetDateTime::new_utc(
             Date::from_calendar_date(2000, time::Month::April, 1).unwrap(),
             Time::from_hms(1, 2, 3).unwrap(),
         );

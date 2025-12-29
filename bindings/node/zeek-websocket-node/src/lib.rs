@@ -177,15 +177,9 @@ impl TryFrom<Value> for zeek_websocket::Value {
                 ))
             }
             Value::Timestamp { nanos } => {
-                let offset = UtcOffset::current_local_offset()
-                    .map_err(|e| Error::UnknownLocalTzOffset(e.to_string()))?;
                 let time = OffsetDateTime::from_unix_timestamp_nanos(nanos.into())
-                    .map_err(|e| Error::ComponentRange(e.to_string()))?
-                    .replace_offset(offset);
-                zeek_websocket::Value::Timestamp(zeek_websocket::PrimitiveDateTime::new(
-                    time.date(),
-                    time.time(),
-                ))
+                    .map_err(|e| Error::ComponentRange(e.to_string()))?;
+                zeek_websocket::Value::Timestamp(time)
             }
             Value::Vector { value } => zeek_websocket::Value::Vector(
                 value

@@ -58,7 +58,7 @@ enum Value {
     Integer(i64),
     Real(OrderedFloat<f64>),
     Timespan(time::Duration),
-    Timestamp(time::PrimitiveDateTime),
+    Timestamp(time::OffsetDateTime),
     Address(IpAddr),
     Subnet(IpAddr, u8),
     Port(u16, Protocol),

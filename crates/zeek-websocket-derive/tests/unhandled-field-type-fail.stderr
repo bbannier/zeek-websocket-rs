@@ -12,7 +12,7 @@ error[E0277]: the trait bound `Value: From<BTreeSet<u8>>` is not satisfied
             `Value` implements `From<HashSet<T>>`
             `Value` implements `From<IpAddr>`
             `Value` implements `From<IpNetwork>`
-            `Value` implements `From<PrimitiveDateTime>`
+            `Value` implements `From<OffsetDateTime>`
           and $N others
   = note: this error originates in the derive macro `ZeekType` (in Nightly builds, run with -Z macro-backtrace for more info)
 
