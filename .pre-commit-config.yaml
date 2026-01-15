@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/doublify/pre-commit-rust
-    rev: v1.0
+    rev: eeee35a89e69d5772bdee97db1a6a898467b686e  # frozen: v1.0
     hooks:
       - id: fmt
       - id: clippy
@@ -8,48 +8,48 @@ repos:
       - id: cargo-check
         args: ['--all', '--all-features', '--workspace']
   - repo: https://github.com/jorisroovers/gitlint
-    rev: v0.19.1
+    rev: acc9d9de6369b76d22cb4167029d2035e8730b98  # frozen: v0.19.1
     hooks:
       - id: gitlint
   - repo: https://github.com/crate-ci/typos
-    rev: v1.40.0
+    rev: bb4666ad77b539a6b4ce4eda7ebb6de553704021  # frozen: v1.42.0
     hooks:
       - id: typos
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.46.0
+    rev: 76b3d32d3f4b965e1d6425253c59407420ae2c43  # frozen: v0.47.0
     hooks:
       - id: markdownlint-fix
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v4.0.0-alpha.8
+    rev: f12edd9c7be1c20cfa42420fd0e6df71e42b51ea  # frozen: v4.0.0-alpha.8
     hooks:
       - id: prettier
         exclude: ".*[js|ts]"
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.9
+    rev: 0933c147c9d6587653d45fdcb4c497c57a65f9af  # frozen: v1.7.10
     hooks:
       - id: actionlint
 
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.18.0
+    rev: 7fc963270df722f37707d47ff41265fe8f460822  # frozen: v1.20.0
     hooks:
       - id: zizmor
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.7
+    rev: 6ce4b4fc349b8881cbce40207dac3bf78824a88e  # frozen: v0.14.11
     hooks:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.0
+    rev: a66e98df7b4aeeb3724184b332785976d062b92e  # frozen: v1.19.1
     hooks:
       - id: mypy
         args: [--strict]
@@ -61,17 +61,17 @@ repos:
           - websockets
 
   - repo: https://github.com/abravalheri/validate-pyproject
-    rev: v0.24.1
+    rev: 78f5e0f104cfa803d0597eaa924b4de3becd3e3e  # frozen: v0.24.1
     hooks:
       - id: validate-pyproject
 
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v21.1.6
+    rev: 75ca4ad908dc4a99f57921f29b7e6c1521e10b26  # frozen: v21.1.8
     hooks:
       - id: clang-format
         types_or: ['c', 'c++']
   - repo: https://github.com/cheshirekow/cmake-format-precommit
-    rev: v0.6.13
+    rev: e2c2116d86a80e72e7146a06e68b7c228afc6319  # frozen: v0.6.13
     hooks:
       - id: cmake-format
       - id: cmake-lint
