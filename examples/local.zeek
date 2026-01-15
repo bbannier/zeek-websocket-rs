@@ -2,7 +2,7 @@
 
 # Starts a 0mq-backed Zeek cluster listening on 8080 for WebSocket traffic.
 
-@load frameworks/cluster/backend/zeromq/connect
+@load policy/frameworks/cluster/backend/zeromq
 
 redef Cluster::Backend::ZeroMQ::run_proxy_thread = T;
 
