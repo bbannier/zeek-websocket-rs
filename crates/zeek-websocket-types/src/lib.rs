@@ -16,7 +16,7 @@ pub use ordered_float::OrderedFloat;
 pub use time::{Duration, OffsetDateTime};
 
 /// Enum for all basic types understood by Zeek's WebSocket API.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 #[serde(tag = "@data-type", rename_all = "lowercase", content = "data")]
 pub enum Value {
     None,
@@ -176,7 +176,7 @@ impl PartialEq for ConversionError {
 }
 
 /// A Zeek port which holds both a port number and a protocol identifier.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
 pub struct Port {
     number: u16,
     protocol: Protocol,
@@ -243,7 +243,7 @@ impl FromStr for Port {
 }
 
 /// A network protocol understood by Zeek.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum Protocol {
     TCP,
@@ -410,7 +410,7 @@ impl FromStr for Protocol {
 }
 
 /// An entry in a table in a [`Value::Table`].
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
 pub struct TableEntry {
     pub key: Value,
     pub value: Value,
