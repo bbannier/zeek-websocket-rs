@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     error::Error,
     fmt::Display,
     net::IpAddr,
@@ -35,7 +35,7 @@ pub enum Value {
     Subnet(IpNetwork),
     Port(Port),
     Vector(Vec<Value>),
-    Set(Vec<Value>),
+    Set(BTreeSet<Value>),
     Table(Vec<TableEntry>),
 }
 
@@ -869,7 +869,7 @@ mod test {
             .unwrap()
         );
         assert_eq!(
-            Value::Set(vec!["foo".into(), "bar".into()]),
+            Value::Set(["foo".into(), "bar".into()].into_iter().collect()),
             serde_json::from_value(json!({
                 "@data-type": "set",
                 "data": [

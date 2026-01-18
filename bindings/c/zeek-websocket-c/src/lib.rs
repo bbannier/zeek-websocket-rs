@@ -493,7 +493,7 @@ impl Value {
         num_values: usize,
     ) -> Box<Self> {
         let values = unsafe { slice::from_raw_parts(values, num_values) };
-        let xs: Vec<_> = values.iter().map(|x| x.0.clone()).collect();
+        let xs = values.iter().map(|x| x.0.clone()).collect();
         Box::new(Self(zeek_websocket::Value::Set(xs)))
     }
 
