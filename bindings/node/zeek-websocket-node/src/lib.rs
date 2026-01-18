@@ -196,12 +196,7 @@ impl TryFrom<Value> for zeek_websocket::Value {
             Value::Table { value } => zeek_websocket::Value::Table(
                 value
                     .into_iter()
-                    .map(|(k, v)| {
-                        Ok(zeek_websocket::TableEntry::new(
-                            k.try_into()?,
-                            v.try_into()?,
-                        ))
-                    })
+                    .map(|(k, v)| Ok((k.try_into()?, v.try_into()?)))
                     .collect::<Result<_, _>>()?,
             ),
             Value::Address { value } => zeek_websocket::Value::Address(
@@ -247,9 +242,7 @@ impl TryFrom<zeek_websocket::Value> for Value {
             zeek_websocket::Value::Table(x) => Value::Table {
                 value: x
                     .into_iter()
-                    .map(|zeek_websocket::TableEntry { key, value }| {
-                        Ok((key.try_into()?, value.try_into()?))
-                    })
+                    .map(|(key, value)| Ok((key.try_into()?, value.try_into()?)))
                     .collect::<Result<_, _>>()?,
             },
             zeek_websocket::Value::Port(port) => Value::Port {

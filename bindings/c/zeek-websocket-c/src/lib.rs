@@ -509,15 +509,9 @@ impl Value {
         num_values: usize,
     ) -> Box<Self> {
         let values = unsafe { slice::from_raw_parts(values, num_values) };
-        let xs: Vec<_> = values
+        let xs = values
             .iter()
-            .map(|x| {
-                TableEntry {
-                    key: x.key.clone(),
-                    value: x.value.clone(),
-                }
-                .into()
-            })
+            .map(|x| (x.key.clone().0, x.value.clone().0))
             .collect();
         Box::new(Self(zeek_websocket::Value::Table(xs)))
     }
@@ -719,7 +713,7 @@ impl Value {
         };
         result.0 = xs
             .into_iter()
-            .map(|zeek_websocket::TableEntry { key, value }| (Value(key), Value(value)))
+            .map(|(key, value)| (Value(key), Value(value)))
             .collect();
         true
     }

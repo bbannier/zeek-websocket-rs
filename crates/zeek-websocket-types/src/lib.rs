@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeSeq};
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     error::Error,
     fmt::Display,
     net::IpAddr,
@@ -36,7 +36,13 @@ pub enum Value {
     Port(Port),
     Vector(Vec<Value>),
     Set(BTreeSet<Value>),
-    Table(Vec<TableEntry>),
+    Table(
+        #[serde(
+            serialize_with = "serialize_table",
+            deserialize_with = "deserialize_table"
+        )]
+        BTreeMap<Value, Value>,
+    ),
 }
 
 macro_rules! impl_from_T {
@@ -124,7 +130,12 @@ where
     V: Into<Value>,
 {
     fn from(value: HashMap<K, V>) -> Self {
-        Value::Table(value.into_iter().map(Into::into).collect())
+        Value::Table(
+            value
+                .into_iter()
+                .map(|(k, v)| (k.into(), v.into()))
+                .collect(),
+        )
     }
 }
 
@@ -286,7 +297,7 @@ mod timestamp {
         use serde::de::Error;
         let s = String::deserialize(deserializer)?;
 
-        let time = PrimitiveDateTime::parse(dbg!(&s), FORMAT).map_err(D::Error::custom)?;
+        let time = PrimitiveDateTime::parse(&s, FORMAT).map_err(D::Error::custom)?;
 
         let offset = UtcOffset::current_local_offset().map_err(D::Error::custom)?;
         let time = time.assume_offset(offset);
@@ -409,7 +420,7 @@ impl FromStr for Protocol {
     }
 }
 
-/// An entry in a table in a [`Value::Table`].
+/// An entry in a table in a serialized [`Value::Table`].
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
 pub struct TableEntry {
     pub key: Value,
@@ -418,21 +429,16 @@ pub struct TableEntry {
 
 impl TableEntry {
     #[must_use]
-    pub fn new(key: Value, value: Value) -> Self {
+    pub fn new<K, V>(key: K, value: V) -> Self
+    where
+        K: Into<Value>,
+        V: Into<Value>,
+    {
+        let key = key.into();
+        let value = value.into();
         TableEntry { key, value }
     }
 }
-
-impl<K, V> From<(K, V)> for TableEntry
-where
-    K: Into<Value>,
-    V: Into<Value>,
-{
-    fn from((key, value): (K, V)) -> Self {
-        TableEntry::new(key.into(), value.into())
-    }
-}
-
 /// Data messages of the Zeek API.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -581,6 +587,26 @@ impl From<Data> for Value {
     }
 }
 
+fn serialize_table<S>(map: &BTreeMap<Value, Value>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut s = s.serialize_seq(Some(map.len()))?;
+    for (k, v) in map {
+        let entry = TableEntry::new(k.clone(), v.clone());
+        s.serialize_element(&entry)?;
+    }
+    s.end()
+}
+
+fn deserialize_table<'de, D>(d: D) -> Result<BTreeMap<Value, Value>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let vec = Vec::<TableEntry>::deserialize(d)?;
+    Ok(vec.into_iter().map(|e| (e.key, e.value)).collect())
+}
+
 /// A Zeek event.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Event {
@@ -685,15 +711,13 @@ mod test {
     #![allow(clippy::unwrap_used)]
 
     use std::{
-        collections::{HashMap, HashSet},
+        collections::{BTreeMap, HashMap, HashSet},
         i64,
         net::IpAddr,
         str::FromStr,
     };
 
-    use crate::{
-        ConversionError, Data, Event, Message, ParseError, Port, Protocol, TableEntry, Value,
-    };
+    use crate::{ConversionError, Data, Event, Message, ParseError, Port, Protocol, Value};
     use ipnetwork::IpNetwork;
     use serde_json::json;
     use time::{Date, Duration, OffsetDateTime, Time, UtcOffset};
@@ -885,10 +909,14 @@ mod test {
             .unwrap()
         );
         assert_eq!(
-            Value::Table(vec![
-                ("first-name", "John").into(),
-                ("last-name", "Doe").into()
-            ]),
+            Value::Table(
+                [
+                    ("first-name".into(), "John".into()),
+                    ("last-name".into(), "Doe".into())
+                ]
+                .into_iter()
+                .collect()
+            ),
             serde_json::from_value(json!({
                "@data-type": "table",
                "data": [
@@ -1011,7 +1039,7 @@ mod test {
     fn table() {
         assert_eq!(
             serde_json::from_value::<Value>(json!({"@data-type":"table", "data": []})).unwrap(),
-            Value::Table(vec![])
+            Value::Table(BTreeMap::default())
         );
 
         assert_eq!(
@@ -1028,12 +1056,8 @@ mod test {
                 }
             }]}))
             .unwrap(),
-            Value::Table(vec![("one", 1u8).into()])
+            Value::Table([("one".into(), 1u8.into())].into_iter().collect())
         );
-
-        let t = TableEntry::new("one".into(), 1u8.into());
-        assert_eq!(t.key, Value::String("one".into()));
-        assert_eq!(t.value, Value::Count(1));
 
         let table: HashMap<_, _> = [(1, 11), (2, 22), (3, 33)].iter().copied().collect();
         let Value::Table(xs) = Value::from(table) else {

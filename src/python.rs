@@ -12,7 +12,7 @@ use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict, PyNone, PyTuple, PyType},
 };
-use zeek_websocket_types::{TableEntry, Value as RustValue};
+use zeek_websocket_types::Value as RustValue;
 
 mod asyncio;
 
@@ -260,7 +260,7 @@ impl TryFrom<Value> for RustValue {
             Value::Table(xs) => {
                 let xs: PyResult<_> = xs
                     .into_iter()
-                    .map(|(k, v)| Ok(TableEntry::new(k.try_into()?, v.try_into()?)))
+                    .map(|(k, v)| Ok((k.try_into()?, v.try_into()?)))
                     .collect();
                 RustValue::Table(xs?)
             }
@@ -308,7 +308,7 @@ impl From<RustValue> for Value {
             RustValue::Set(xs) => Value::Set(xs.into_iter().map(Into::into).collect()),
             RustValue::Table(xs) => Value::Table(
                 xs.into_iter()
-                    .map(|TableEntry { key, value }| (key.into(), value.into()))
+                    .map(|(key, value)| (key.into(), value.into()))
                     .collect(),
             ),
             #[allow(clippy::redundant_closure_for_method_calls)]
