@@ -162,7 +162,7 @@ impl TryFrom<Value> for zeek_websocket::Value {
                 zeek_websocket::Value::Count(value)
             }
             Value::Integer { value } => zeek_websocket::Value::Integer(value),
-            Value::Real { value } => zeek_websocket::Value::Real(value),
+            Value::Real { value } => zeek_websocket::Value::Real(value.into()),
             Value::String { value } => zeek_websocket::Value::String(value),
             Value::EnumValue { value } => zeek_websocket::Value::EnumValue(value),
             Value::Timespan { nanos } => {
@@ -229,7 +229,7 @@ impl TryFrom<zeek_websocket::Value> for Value {
                 value: BigInt::from(x),
             },
             zeek_websocket::Value::Integer(x) => Value::Integer { value: x },
-            zeek_websocket::Value::Real(x) => Value::Real { value: x },
+            zeek_websocket::Value::Real(x) => Value::Real { value: *x },
             zeek_websocket::Value::String(x) => Value::String { value: x },
             zeek_websocket::Value::EnumValue(x) => Value::EnumValue { value: x },
             zeek_websocket::Value::Vector(x) => Value::Vector {

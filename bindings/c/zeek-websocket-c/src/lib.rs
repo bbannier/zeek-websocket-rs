@@ -383,7 +383,7 @@ impl Value {
     /// Returned value must be freed by caller with `zws_value_free`.
     #[unsafe(no_mangle)]
     pub extern "C" fn zws_value_new_real(data: f64) -> Box<Self> {
-        Box::new(Self(zeek_websocket::Value::Real(data)))
+        Box::new(Self(zeek_websocket::Value::Real(data.into())))
     }
 
     /// Returned value must be freed by caller with `zws_value_free`.
@@ -578,7 +578,7 @@ impl Value {
         let zeek_websocket::Value::Real(x) = &self.0 else {
             return false;
         };
-        *result = *x;
+        *result = **x;
         true
     }
 

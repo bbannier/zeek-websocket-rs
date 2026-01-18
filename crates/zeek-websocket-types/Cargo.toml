@@ -12,6 +12,7 @@ tungstenite = ["dep:tungstenite", "dep:serde_json"]
 
 [dependencies]
 ipnetwork = { workspace = true, features = ["serde"] }
+ordered-float = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true }

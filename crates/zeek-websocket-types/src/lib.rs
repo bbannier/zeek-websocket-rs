@@ -11,6 +11,8 @@ use thiserror::Error;
 #[doc(no_inline)]
 pub use ipnetwork::IpNetwork;
 #[doc(no_inline)]
+pub use ordered_float::OrderedFloat;
+#[doc(no_inline)]
 pub use time::{Duration, OffsetDateTime};
 
 /// Enum for all basic types understood by Zeek's WebSocket API.
@@ -21,7 +23,7 @@ pub enum Value {
     Boolean(bool),
     Count(u64),
     Integer(i64),
-    Real(f64),
+    Real(OrderedFloat<f64>),
     #[serde(with = "timespan")]
     Timespan(Duration),
     #[serde(with = "timestamp")]
@@ -76,7 +78,6 @@ impl_T!(i32, Value::Integer);
 impl_T!(i16, Value::Integer);
 impl_T!(i8, Value::Integer);
 impl_T!(f64, Value::Real);
-impl_from_T!(f32, Value::Real);
 impl_T!(Duration, Value::Timespan);
 impl_T!(OffsetDateTime, Value::Timestamp);
 impl_T!(String, Value::String);
@@ -84,6 +85,13 @@ impl_from_T!(&str, Value::String);
 impl_T!(IpAddr, Value::Address);
 impl_T!(IpNetwork, Value::Subnet);
 impl_T!(Port, Value::Port);
+
+impl From<f32> for Value {
+    fn from(value: f32) -> Self {
+        let value: f64 = value.into();
+        Value::Real(value.into())
+    }
+}
 
 impl From<()> for Value {
     #[allow(clippy::ignored_unit_patterns)]
