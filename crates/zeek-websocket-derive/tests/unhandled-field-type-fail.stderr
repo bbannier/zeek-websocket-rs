@@ -1,8 +1,8 @@
-error[E0277]: the trait bound `Value: From<BTreeSet<u8>>` is not satisfied
- --> tests/unhandled-field-type-fail.rs:4:10
+error[E0277]: the trait bound `Value: From<Custom>` is not satisfied
+ --> tests/unhandled-field-type-fail.rs:5:10
   |
-4 | #[derive(ZeekType)]
-  |          ^^^^^^^^ the trait `From<BTreeSet<u8>>` is not implemented for `Value`
+5 | #[derive(ZeekType)]
+  |          ^^^^^^^^ the trait `From<Custom>` is not implemented for `Value`
   |
   = help: the following other types implement trait `From<T>`:
             `Value` implements `From<&str>`
@@ -16,24 +16,26 @@ error[E0277]: the trait bound `Value: From<BTreeSet<u8>>` is not satisfied
           and $N others
   = note: this error originates in the derive macro `ZeekType` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0271]: type mismatch resolving `<BTreeSet<u8> as TryFrom<Value>>::Error == ConversionError`
- --> tests/unhandled-field-type-fail.rs:4:10
+error[E0271]: type mismatch resolving `<Custom as TryFrom<Value>>::Error == ConversionError`
+ --> tests/unhandled-field-type-fail.rs:5:10
   |
-4 | #[derive(ZeekType)]
+5 | #[derive(ZeekType)]
   |          ^^^^^^^^ expected `ConversionError`, found `Infallible`
   |
   = note: this error originates in the derive macro `ZeekType` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `BTreeSet<u8>: TryFrom<Value>` is not satisfied
- --> tests/unhandled-field-type-fail.rs:4:10
+error[E0277]: the trait bound `Custom: TryFrom<Value>` is not satisfied
+ --> tests/unhandled-field-type-fail.rs:5:10
   |
-4 | #[derive(ZeekType)]
-  |          ^^^^^^^^ the trait `From<Value>` is not implemented for `BTreeSet<u8>`
+5 | #[derive(ZeekType)]
+  |          ^^^^^^^^ unsatisfied trait bound
   |
-  = help: the trait `From<Value>` is not implemented for `BTreeSet<u8>`
-          but trait `From<[u8; _]>` is implemented for it
-  = help: for that trait implementation, expected `[u8; _]`, found `Value`
-  = note: required for `Value` to implement `Into<BTreeSet<u8>>`
-  = note: required for `BTreeSet<u8>` to implement `TryFrom<Value>`
-  = note: required for `Value` to implement `TryInto<BTreeSet<u8>>`
+help: the trait `From<Value>` is not implemented for `Custom`
+ --> tests/unhandled-field-type-fail.rs:3:1
+  |
+3 | struct Custom;
+  | ^^^^^^^^^^^^^
+  = note: required for `Value` to implement `Into<Custom>`
+  = note: required for `Custom` to implement `TryFrom<Value>`
+  = note: required for `Value` to implement `TryInto<Custom>`
   = note: this error originates in the derive macro `ZeekType` (in Nightly builds, run with -Z macro-backtrace for more info)

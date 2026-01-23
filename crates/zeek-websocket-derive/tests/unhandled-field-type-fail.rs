@@ -1,9 +1,10 @@
-use std::collections::BTreeSet;
 use zeek_websocket_derive::ZeekType;
+
+struct Custom;
 
 #[derive(ZeekType)]
 struct X {
-    xs: BTreeSet<u8>,
+    xs: Custom,
 }
 
 fn main() {}
