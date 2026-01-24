@@ -166,7 +166,7 @@ impl Value {
 
     /// Convert to a given target enum instance.
     ///
-    /// `T` must refer to a class which derives from `enum.Enum` or similar.
+    /// `T` must refer to a class which derives from `dataclass.dataclass` or similar.
     #[allow(clippy::needless_pass_by_value)]
     fn as_record(&self, py: Python, target_type: Py<PyType>) -> PyResult<Option<Py<PyAny>>> {
         let dataclasses = py.import("dataclasses")?;
