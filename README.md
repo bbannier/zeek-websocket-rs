@@ -97,15 +97,14 @@ The library provides a convenience function `make_value` which can be used
 to automatically infer a matching `Value` variant,
 
 ```python
-print(f"{make_value(4711)}")  # Prints 'Integer(4711)'.
+print(f"{make_value("abc")}")  # Prints 'String("abc")'.
 ```
 
 > [!CAUTION]
 > The Python `int` type holds signed values while Zeek distinguishes between
-> `count` and `int`. If given a Python `int` `make_value` will return a `Value.Integer`
-> for values smaller than the maximum signed 64 bit integer, and raise an
-> exception otherwise. Prefer explicit typing if a Zeek events expect a Zeek
-> `int`.
+> `count` and `int`. To make behavior predicatable `make_value` will always
+> return a `Value.Real` when given a numeric value. Prefer explicit typing if a
+> Zeek events expect a Zeek integer type like `int` or `count`.
 
 When creating the `Event` in the previous section we passed arguments `(4711,)`
 which also made use of implicit type conversion, and `4711` was implicitly
