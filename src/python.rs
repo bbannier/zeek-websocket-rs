@@ -317,7 +317,7 @@ impl From<RustValue> for Value {
     }
 }
 
-#[pyclass(eq)]
+#[pyclass(from_py_object, eq)]
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 enum Protocol {
     #[allow(clippy::upper_case_acronyms)]
@@ -343,7 +343,7 @@ impl From<Protocol> for zeek_websocket_types::Protocol {
 
 /// API representation of Zeek event.
 #[derive(Debug, Clone, PartialEq)]
-#[pyclass(eq, frozen)]
+#[pyclass(from_py_object, eq, frozen)]
 struct Event(zeek_websocket_types::Event);
 
 #[pymethods]
