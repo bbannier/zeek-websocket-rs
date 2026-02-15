@@ -17,7 +17,7 @@ use crate::python::Event;
 /// async def error(self, error: str) -> None: ...
 /// ```
 #[derive(Clone)]
-#[pyclass(subclass)]
+#[pyclass(from_py_object, subclass)]
 pub struct ZeekClient {
     outbox: Option<crate::client::Outbox>,
 }
