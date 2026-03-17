@@ -10,7 +10,7 @@ def test_real() -> None:
 
 
 def test_none() -> None:
-    json = '{"@data-type":"none"}'
+    json = '{"@data-type":"none","data":{}}'
     value = Value.None_()
 
     assert value.serialize_json() == json

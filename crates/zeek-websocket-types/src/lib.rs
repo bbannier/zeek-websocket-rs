@@ -19,6 +19,10 @@ pub use time::{Duration, OffsetDateTime};
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 #[serde(tag = "@data-type", rename_all = "lowercase", content = "data")]
 pub enum Value {
+    #[serde(
+        serialize_with = "serialize_none",
+        deserialize_with = "deserialize_none"
+    )]
     None,
     Boolean(bool),
     Count(u64),
@@ -587,6 +591,22 @@ impl From<Data> for Value {
     }
 }
 
+fn serialize_none<S>(s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeMap;
+    s.serialize_map(Some(0))?.end()
+}
+
+fn deserialize_none<'de, D>(deserializer: D) -> Result<(), D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let _ = serde::de::IgnoredAny::deserialize(deserializer)?;
+    Ok(())
+}
+
 fn serialize_table<S>(map: &BTreeMap<Value, Value>, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -818,7 +838,7 @@ mod test {
     fn value_from_json() {
         assert_eq!(
             Value::from(()),
-            serde_json::from_value(json!({"@data-type": "none"})).unwrap()
+            serde_json::from_value(json!({"@data-type": "none", "data": {}})).unwrap()
         );
         assert_eq!(
             Value::from(true),
