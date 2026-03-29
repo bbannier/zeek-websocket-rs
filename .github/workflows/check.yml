@@ -23,7 +23,7 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
-      - uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670
+      - uses: moonrepo/setup-rust@abb2d32350334249b178c401e5ec5836e0cd88d3
         with:
           channel: stable
           bins: cargo-hack
@@ -67,7 +67,7 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
-      - uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670
+      - uses: moonrepo/setup-rust@abb2d32350334249b178c401e5ec5836e0cd88d3
         with:
           channel: stable
           bins: cbindgen
@@ -98,7 +98,7 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
         with:
           node-version: 20
-      - uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670
+      - uses: moonrepo/setup-rust@abb2d32350334249b178c401e5ec5836e0cd88d3
         with:
           channel: stable
       - name: Install dependencies
@@ -119,7 +119,7 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
-      - uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670
+      - uses: moonrepo/setup-rust@abb2d32350334249b178c401e5ec5836e0cd88d3
         with:
           channel: stable
           bins: cargo-hack
@@ -137,7 +137,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup rust toolchain, cache and cargo-codspeed binary
-        uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670
+        uses: moonrepo/setup-rust@abb2d32350334249b178c401e5ec5836e0cd88d3
         with:
           channel: stable
           cache-target: release
