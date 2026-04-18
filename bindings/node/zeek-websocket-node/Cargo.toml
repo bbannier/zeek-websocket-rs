@@ -1,8 +1,7 @@
-
 [package]
-authors = ["LongYinan <lynweklm@gmail.com>"]
 edition = "2024"
 name = "zeek-websocket-node"
+license = "BSD-3-Clause"
 version = "0.1.0"
 
 [lib]

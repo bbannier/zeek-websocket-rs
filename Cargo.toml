@@ -2,7 +2,7 @@
 name = "zeek-websocket"
 version = "0.1.0"
 edition = "2024"
-license = "MIT"
+license = "BSD-3-Clause"
 repository = "https://github.com/bbannier/zeek-websocket-rs"
 rust-version = "1.88"
 

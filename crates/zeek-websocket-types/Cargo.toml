@@ -2,6 +2,7 @@
 name = "zeek-websocket-types"
 version = "0.1.0"
 edition = "2024"
+license = "BSD-3-Clause"
 rust-version = "1.88"
 
 [features]
